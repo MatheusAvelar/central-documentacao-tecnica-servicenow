@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<j:jelly trim="false" xmlns:j="jelly:core" xmlns:g="glide">
+
+    <!-- ====================== -->
+    <!--  SECTION INSTANCE SCAN -->
+    <!-- ====================== -->
+    <style>
+        .instance-scan-container {
+            max-width: 900px;
+            margin: auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+
+        .instance-scan-container button {
+            padding: 10px 18px;
+            background: #673ab7;
+            color: #fff;
+            font-weight: bold;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .instance-scan-container button:hover {
+            opacity: 0.9;
+        }
+    </style>
+
+    <div class="instance-scan-container">
+        <div id="errorBoxScan" style="
+				display:none;
+				background:#fdecea;
+				color:#b71c1c;
+				border:1px solid #f5c6cb;
+				border-radius:6px;
+				padding:12px;
+				margin-bottom:15px;
+				font-weight:bold;
+			">
+            Update Set não encontrado.
+        </div>
+        <div id="scanResult" style="min-height:100px;"></div>
+        <div id="findingDetails" style="margin-top:20px;"></div>
+
+    </div>
+
+    <script>
+		function fetchUpdateSetNames(callback) {
+            var updateSetIds = g_form.getValue('u_update_set') || '';
+
+            var ga = new GlideAjax('GetUpdateSetDocumentation');
+            ga.addParam('sysparm_name', 'getNameUpdateSet');
+            ga.addParam('sysparm_update_set_ids', updateSetIds);
+
+            ga.getXMLAnswer(function(response) {
+                var updateSetNames = response;
+                // Retorna os valores via callback
+                if (callback) callback(updateSetNames);
+            });
+        }
+
+        function executarScan() {
+
+            if (typeof g_form === 'undefined') {
+                return;
+            }
+
+            var result = document.getElementById("scanResult");
+            var errorBox = document.getElementById("errorBoxScan");
+
+            fetchUpdateSetNames(function(updateSetNames) {
+
+                if (!updateSetNames) {
+                    errorBox.style.display = "block";
+                    result.innerHTML = "";
+                    return;
+                } else {
+                    errorBox.style.display = "none";
+                }
+
+                result.innerHTML = "<em>Executando scan...</em>";
+
+                var ga = new GlideAjax("GetInstanceScanResults");
+                ga.addParam("sysparm_name", "runScan");
+                ga.addParam("sysparm_update_set", updateSetNames);
+
+                ga.getXMLAnswer(function(response) {
+                    result.innerHTML = response || "Nenhum resultado.";
+                });
+
+            });
+        }
+
+        if (typeof window.showFindings === 'undefined') {
+            window.showFindings = function(scanId) {
+
+                var detailsDiv = document.getElementById("findingDetails");
+
+                detailsDiv.innerHTML = "<em>Carregando findings...</em>";
+
+                var ga = new GlideAjax("GetInstanceScanResults");
+                ga.addParam("sysparm_name", "getFindings");
+                ga.addParam("sysparm_scan_id", scanId);
+
+                ga.getXMLAnswer(function(response) {
+                    detailsDiv.innerHTML = response || "Nenhum finding encontrado.";
+                });
+            };
+
+        }
+
+        addLoadEvent(function() {
+            executarScan();
+        });
+    </script>
+
+</j:jelly>

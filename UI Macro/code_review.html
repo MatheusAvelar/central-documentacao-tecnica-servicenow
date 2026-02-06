@@ -1,0 +1,365 @@
+<?xml version="1.0" encoding="utf-8"?>
+<j:jelly trim="false" xmlns:j="jelly:core" xmlns:g="glide">
+
+    <div id="tab-review" class="tab-content">
+
+        <!-- ====================== -->
+        <!--   SECTION CODE REVIEW  -->
+        <!-- ====================== -->
+        <style>
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 20px;
+                font-size: 13px;
+                table-layout: fixed;
+            }
+
+            th,
+            td {
+                border: 1px solid #ccc;
+                padding: 8px;
+                text-align: center;
+                white-space: normal;
+                word-break: break-word;
+                overflow-wrap: break-word;
+            }
+
+            th {
+                background: #009639;
+                color: #fff;
+            }
+
+            tr.passou td {
+                background-color: #DFF0D8 !important;
+            }
+
+            tr.nao-passou td {
+                background-color: #F8D7DA !important;
+            }
+
+            .table-responsive {
+                width: 100%;
+                margin-top: 20px;
+            }
+
+            input[type="text"] {
+                width: 100%;
+                padding: 6px;
+                margin: 5px 0 10px 0;
+                border-radius: 6px;
+                border: 1px solid #ccc;
+                box-sizing: border-box;
+            }
+
+            button {
+                padding: 8px 16px;
+                border-radius: 6px;
+                border: none;
+                cursor: pointer;
+                font-weight: bold;
+                font-size: 12px;
+            }
+
+            #btnBuscar {
+                background: #2196F3;
+                color: #fff;
+            }
+
+            #btnSalvar {
+                background: #4CAF50;
+                color: #fff;
+                margin-left: 10px;
+            }
+
+            .filters {
+                max-width: 1000px;
+                margin: auto;
+                padding: 20px;
+            }
+        </style>
+
+        <div class="filters">
+
+            <label><b>Filtrar por Type</b></label>
+            <input type="text" id="typeFilter" placeholder="Ex: Business Rule, Client Script, UI Page" />
+
+            <label><b>Excluir Type</b></label>
+            <input type="text" id="notTypeFilter" placeholder="Ex: Script Include, ACL, Flow" />
+
+            <label><b>Filtrar por Application</b></label>
+            <input type="text" id="applicationFilter" placeholder="Ex: Global, x_app_core, x_app_custom" />
+
+            <div style="margin-top:10px;">
+                <input type="checkbox" id="filterPassou" onchange="filtrarPassou()" />
+                <label for="filterPassou">Mostrar apenas os que passaram</label>
+
+                <input type="checkbox" id="filterNaoPassou" onchange="filtrarNaoPassou()" style="margin-left:15px;" />
+                <label for="filterNaoPassou">Mostrar apenas os que não passaram</label>
+            </div>
+
+            <button id="btnBuscar" type="button" onclick="buscarArtefatos()">🔍 Buscar</button>
+            <button id="btnSalvar" type="button">💾 Salvar Review</button>
+
+            <hr style="margin:30px 0;border:none;border-top:2px solid #eee;" />
+
+            <div id="errorBoxCode" style="
+				display:none;
+				background:#fdecea;
+				color:#b71c1c;
+				border:1px solid #f5c6cb;
+				border-radius:6px;
+				padding:12px;
+				margin-bottom:15px;
+				font-weight:bold;
+			">
+                Update Set não encontrado.
+            </div>
+
+            <div id="resultado"></div>
+        </div>
+    </div>
+
+    <script>
+        function fetchUpdateSetNames(callback) {
+            var updateSetIds = g_form.getValue('u_update_set') || '';
+
+            var ga = new GlideAjax('GetUpdateSetDocumentation');
+            ga.addParam('sysparm_name', 'getNameUpdateSet');
+            ga.addParam('sysparm_update_set_ids', updateSetIds);
+
+            ga.getXMLAnswer(function(response) {
+                var updateSetNames = response;
+                // Retorna os valores via callback
+                if (callback) callback(updateSetNames);
+            });
+        }
+
+        function buscarArtefatos() {
+
+            var errorBox = document.getElementById("errorBoxCode");
+
+            fetchUpdateSetNames(function(updateSetNames) {
+
+                if (!updateSetNames) {
+                    errorBox.style.display = "block";
+                    document.getElementById("resultado").innerHTML = "";
+                    return;
+                } else {
+                    errorBox.style.display = "none";
+                }
+
+                var ga = new GlideAjax('GetUpdateSetArtifacts');
+                ga.addParam('sysparm_name', 'getArtifacts');
+                ga.addParam('sysparm_updates', updateSetNames);
+                ga.addParam('sysparm_types', document.getElementById('typeFilter').value);
+                ga.addParam('sysparm_notTypes', document.getElementById('notTypeFilter').value);
+                ga.addParam('sysparm_application', document.getElementById('applicationFilter').value);
+
+                ga.getXMLAnswer(renderTabela);
+            });
+        }
+
+        function renderTabela(response) {
+
+            var data = JSON.parse(response || '[]');
+            var resultado = document.getElementById('resultado');
+            resultado.innerHTML = '';
+
+            if (!data.length) {
+                resultado.innerHTML = '<p><i>Nenhum artefato encontrado.</i></p>';
+                return;
+            }
+
+            var table = document.createElement('table');
+            table.innerHTML =
+                '<thead>' +
+                '<tr>' +
+                '<th>Nome</th>' +
+                '<th>Ação</th>' +
+                '<th>Type</th>' +
+                '<th>Update Set</th>' +
+                '<th>Application</th>' +
+                '<th>Passou</th>' +
+                '<th>Não Passou</th>' +
+                '<th>Comentário</th>' +
+                '</tr>' +
+                '</thead>';
+
+            var tbody = document.createElement('tbody');
+
+            data.forEach(function(item, index) {
+
+                var tr = document.createElement('tr');
+                tr.id = 'row_' + index;
+                tr.setAttribute('data-link', item.link);
+
+                if (item.passou === true) tr.classList.add('passou');
+                if (item.naoPassou === true) tr.classList.add('nao-passou');
+
+                // Nome
+                var tdNome = document.createElement('td');
+                var a = document.createElement('a');
+                a.href = item.link;
+                a.target = '_blank';
+                a.innerText = item.name;
+                tdNome.appendChild(a);
+                tr.appendChild(tdNome);
+
+                ['action', 'type', 'updateSet', 'application'].forEach(function(k) {
+                    var td = document.createElement('td');
+                    td.innerText = item[k];
+                    tr.appendChild(td);
+                });
+
+                // Passou
+                var tdPassou = document.createElement('td');
+                var chkPassou = document.createElement('input');
+                chkPassou.type = 'checkbox';
+                chkPassou.id = 'passou_' + index;
+                chkPassou.checked = item.passou === true;
+                chkPassou.onclick = function() {
+                    marcarPassou(index);
+                };
+                tdPassou.appendChild(chkPassou);
+                tr.appendChild(tdPassou);
+
+                // Não passou
+                var tdNao = document.createElement('td');
+                var chkNao = document.createElement('input');
+                chkNao.type = 'checkbox';
+                chkNao.id = 'naoPassou_' + index;
+                chkNao.checked = item.naoPassou === true;
+                chkNao.onclick = function() {
+                    marcarNaoPassou(index);
+                };
+                tdNao.appendChild(chkNao);
+                tr.appendChild(tdNao);
+
+                // Comentário
+                var tdComent = document.createElement('td');
+                var txt = document.createElement('input');
+                txt.type = 'text';
+                txt.id = 'comentario_' + index;
+                txt.value = item.comentario || '';
+                tdComent.appendChild(txt);
+                tr.appendChild(tdComent);
+
+                tbody.appendChild(tr);
+            });
+
+            table.appendChild(tbody);
+
+            var wrapper = document.createElement('div');
+            wrapper.className = 'table-responsive';
+            wrapper.appendChild(table);
+
+            resultado.appendChild(wrapper);
+        }
+
+        function marcarPassou(i) {
+            var chkPassou = document.getElementById('passou_' + i);
+            var chkNao = document.getElementById('naoPassou_' + i);
+            var row = document.getElementById('row_' + i);
+
+            if (chkPassou.checked) {
+                chkNao.checked = false;
+                row.classList.add('passou');
+                row.classList.remove('nao-passou');
+            } else {
+                row.classList.remove('passou');
+            }
+        }
+
+        function marcarNaoPassou(i) {
+            var chkPassou = document.getElementById('passou_' + i);
+            var chkNao = document.getElementById('naoPassou_' + i);
+            var row = document.getElementById('row_' + i);
+
+            if (chkNao.checked) {
+                chkPassou.checked = false;
+                row.classList.add('nao-passou');
+                row.classList.remove('passou');
+            } else {
+                row.classList.remove('nao-passou');
+            }
+        }
+
+        function filtrarPassou() {
+            var ativo = document.getElementById('filterPassou').checked;
+            document.querySelectorAll('#resultado tbody tr').forEach(function(row) {
+                row.style.display = (!ativo || row.classList.contains('passou')) ? '' : 'none';
+            });
+        }
+
+        function filtrarNaoPassou() {
+            var ativo = document.getElementById('filterNaoPassou').checked;
+            document.querySelectorAll('#resultado tbody tr').forEach(function(row) {
+                row.style.display = (!ativo || row.classList.contains('nao-passou')) ? '' : 'none';
+            });
+        }
+
+        function salvarReviews() {
+            var tbody = document.querySelector('#resultado table tbody');
+            if (!tbody) {
+                alert('Nenhum dado para salvar.');
+                return;
+            }
+
+            var data = [];
+
+            Array.from(tbody.rows).forEach(function(row) {
+
+                var chkPassou = row.querySelector("input[id^='passou_']");
+                var chkNao = row.querySelector("input[id^='naoPassou_']");
+                var comentario = row.querySelector("input[id^='comentario_']");
+                var usdh = g_form.getUniqueValue();
+
+                var passou = false;
+                var naoPassou = false;
+
+                if (chkPassou) {
+                    passou = chkPassou.checked === true;
+                }
+
+                if (chkNao) {
+                    naoPassou = chkNao.checked === true;
+                }
+
+                if (passou || naoPassou) {
+                    data.push({
+                        name: row.cells[0].innerText.trim(),
+                        action: row.cells[1].innerText,
+                        type: row.cells[2].innerText,
+                        updateSet: row.cells[3].innerText,
+                        application: row.cells[4].innerText,
+                        passou: passou,
+                        naoPassou: naoPassou,
+                        comentario: comentario ? comentario.value : '',
+                        link: row.getAttribute('data-link'),
+                        usdh: usdh
+                    });
+                }
+            });
+
+            if (data.length === 0) {
+                alert('Nenhum registro selecionado.');
+                return;
+            }
+
+            var ga = new GlideAjax('GetUpdateSetArtifacts');
+            ga.addParam('sysparm_name', 'saveReview');
+            ga.addParam('sysparm_data', JSON.stringify(data));
+            ga.getXMLAnswer(function(response) {
+                alert(response);
+            });
+        }
+
+        addLoadEvent(function() {
+            buscarArtefatos();
+        });
+
+        document.getElementById('btnSalvar').onclick = salvarReviews;
+    </script>
+
+</j:jelly>

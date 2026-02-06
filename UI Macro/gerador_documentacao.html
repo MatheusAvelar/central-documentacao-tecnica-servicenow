@@ -1,0 +1,361 @@
+<?xml version="1.0" encoding="utf-8"?>
+<j:jelly trim="false" xmlns:j="jelly:core" xmlns:g="glide">
+
+    <!-- ====================== -->
+    <!--     ABA DOCUMENTAÇÃO   -->
+    <!-- ====================== -->
+    <div id="tab-doc" class="tab-content active">
+
+        <style>
+            input[type="text"],
+            select,
+            textarea {
+                width: 100%;
+                padding: 10px;
+                margin: 5px 0 15px 0;
+                border: 1px solid #ccc;
+                border-radius: 6px;
+                box-sizing: border-box;
+            }
+
+            button {
+                padding: 10px 18px;
+                border-radius: 6px;
+                border: none;
+                cursor: pointer;
+                font-weight: bold;
+                margin-right: 10px;
+            }
+
+            #attachBtn {
+                background: #2196F3;
+                color: #fff;
+                //display: none;
+            }
+
+            img {
+                max-width: 800px;
+                max-height: 890px;
+                border-radius: 6px;
+                margin-top: 8px;
+            }
+
+            #docResult table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+
+            #docResult td,
+            #docResult th {
+                text-align: left !important;
+                vertical-align: top;
+                padding: 8px 10px;
+            }
+        </style>
+
+        <div style="max-width:900px; margin:auto; padding:20px;">
+
+            <div style="text-align:center;margin-top:15px;">
+                <button id="attachBtn" type="button"> Anexar Imagem</button>
+                <input type="file" id="fileInput" accept="image/*" style="display:none;" />
+            </div>
+
+            <hr style="margin:30px 0;border:none;border-top:2px solid #eee;" />
+
+            <div id="errorBoxDoc" style="
+				display:none;
+				background:#fdecea;
+				color:#b71c1c;
+				border:1px solid #f5c6cb;
+				border-radius:6px;
+				padding:12px;
+				margin-bottom:15px;
+				font-weight:bold;
+			">
+                Update Set não encontrado.
+            </div>
+            <div id="docResult" style="margin-top:20px; min-height:100px;"></div>
+            <div id="blocoEvidencias" style="margin-top:20px;"></div>
+
+        </div>
+    </div>
+
+    <script>
+        function fetchUpdateSetNames(callback) {
+            var updateSetIds = g_form.getValue('u_update_set') || '';
+
+            var ga = new GlideAjax('GetUpdateSetDocumentation');
+            ga.addParam('sysparm_name', 'getNameUpdateSet');
+            ga.addParam('sysparm_update_set_ids', updateSetIds);
+
+            ga.getXMLAnswer(function(response) {
+                var updateSetNames = response;
+                // Retorna os valores via callback
+                if (callback) callback(updateSetNames);
+            });
+        }
+
+        function generateDocumentation() {
+            var errorBox = document.getElementById("errorBoxDoc");
+            var audience = 'dev';
+
+            // Chamando a função assíncrona
+            fetchUpdateSetNames(function(updateSet) {
+                if (!updateSet) {
+                    errorBox.style.display = "block";
+                    document.getElementById("docResult").innerHTML = "";
+                    return;
+                } else {
+                    errorBox.style.display = "none";
+                }
+
+                var docResult = document.getElementById("docResult");
+                docResult.innerHTML = "<em>Gerando documentação...</em>";
+
+                var ga = new GlideAjax("GetUpdateSetDocumentation");
+                ga.addParam("sysparm_name", "getDocumentation");
+                ga.addParam("sysparm_update_set", updateSet);
+                ga.addParam("sysparm_audience", audience);
+
+                ga.getXMLAnswer(function(response) {
+                    docResult.innerHTML = response || "<i>Nenhum conteúdo retornado.</i>";
+                    document.getElementById("attachBtn").style.display = "inline-block";
+                    tornarReadOnly();
+                    loadExistingImages();
+                });
+            });
+        }
+
+        addLoadEvent(function() {
+            generateDocumentation();
+            toggleAttachButton();
+        });
+
+        function toggleAttachButton() {
+            var btnDoc = document.getElementById('attachBtn');
+			var btnRev = document.getElementById('btnSalvar');
+
+            if (!btnDoc) return;
+
+            var status = g_form.getValue('u_status');
+
+            if (status === 'aprovado') {
+				btnDoc.classList.add('hidden');
+				btnRev.classList.add('hidden');
+                g_form.disableAttachments();
+            }
+        }
+
+        /* ================= UPLOAD DE IMAGENS ================= */
+        document.getElementById("attachBtn").onclick = function() {
+            document.getElementById("fileInput").click();
+        };
+
+        document.getElementById("fileInput").onchange = function(event) {
+
+            var file = event.target.files[0];
+            if (!file) return;
+
+            var reader = new FileReader();
+
+            reader.onload = function(e) {
+
+                var base64 = e.target.result.split(',')[1];
+
+                var ga = new GlideAjax('USDHAttachmentAjaxs');
+                ga.addParam('sysparm_name', 'uploadImage');
+                ga.addParam('sysparm_record_sys_id', g_form.getUniqueValue());
+                ga.addParam('sysparm_file_name', file.name);
+                ga.addParam('sysparm_file_base64', base64);
+
+                ga.getXMLAnswer(function(attachmentSysId) {
+
+                    if (!attachmentSysId) {
+                        alert('Erro ao anexar imagem');
+                        return;
+                    }
+
+                    renderImage(attachmentSysId);
+                });
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        function tornarReadOnly() {
+
+            var docResult = document.getElementById('docResult');
+            if (!docResult) {
+                return;
+            }
+
+            /* ===== INPUTS ===== */
+            var inputs = docResult.getElementsByTagName('input');
+
+            for (var i in inputs) {
+
+                var input = inputs[i];
+                if (!input || !input.setAttribute) {
+                    continue;
+                }
+
+                input.setAttribute('readonly', 'readonly');
+                input.style.backgroundColor = '#f9f9f9';
+                input.style.cursor = 'not-allowed';
+            }
+
+            var textareas = docResult.getElementsByTagName('textarea');
+
+            for (var j in textareas) {
+
+                var ta = textareas[j];
+                if (!ta || !ta.setAttribute) {
+                    continue;
+                }
+
+                ta.setAttribute('readonly', 'readonly');
+                ta.style.backgroundColor = '#f9f9f9';
+                ta.style.cursor = 'not-allowed';
+            }
+        }
+
+        function renderImage(attachmentSysId, description) {
+
+            var container = document.createElement("div");
+            container.style.marginBottom = "12px";
+
+            /* ===== IMAGEM ===== */
+            var img = document.createElement('img');
+            img.src = '/sys_attachment.do?sys_id=' + attachmentSysId;
+            img.style.maxWidth = "800px";
+            img.style.maxHeight = "890px";
+            img.style.objectFit = "contain";
+            img.style.border = "1px solid #ccc";
+            img.style.borderRadius = "6px";
+            img.style.display = "block";
+
+            container.appendChild(img);
+
+            /* ===== INPUT DESCRIÇÃO ===== */
+            var inputText = document.createElement("input");
+            inputText.type = "text";
+            inputText.placeholder = "Descrição da imagem...";
+            inputText.value = description || '';
+
+            inputText.style.width = "100%";
+            inputText.style.marginTop = "6px";
+            inputText.style.padding = "6px";
+            inputText.style.borderRadius = "4px";
+            inputText.style.border = "1px solid #ccc";
+
+            if (typeof description === 'string') {
+                tornarInputReadonly(inputText);
+            }
+
+            inputText.ondblclick = function() {
+                tornarInputEditavel(inputText);
+                inputText.focus();
+            };
+
+            inputText.onblur = function() {
+
+                if (!inputText.value.trim())
+                    return;
+
+                salvarDescricaoImagem(attachmentSysId, inputText.value, function(ok) {
+                    if (ok) {
+                        tornarInputReadonly(inputText);
+                    } else {
+                        alert('Erro ao salvar descrição');
+                    }
+                });
+            };
+
+            container.appendChild(inputText);
+
+            /* ===== BOTÃO EXCLUIR ===== */
+            var btnDelete = document.createElement('button');
+            btnDelete.type = 'button';
+            btnDelete.innerHTML = ' Excluir';
+
+            btnDelete.style.background = '#f44336';
+            btnDelete.style.color = '#fff';
+            btnDelete.style.border = 'none';
+            btnDelete.style.padding = '6px 10px';
+            btnDelete.style.marginTop = '6px';
+            btnDelete.style.cursor = 'pointer';
+
+            btnDelete.onclick = function(e) {
+                e.preventDefault();
+                deleteImage(attachmentSysId, container);
+            };
+
+            container.appendChild(btnDelete);
+
+            document.getElementById('blocoEvidencias').appendChild(container);
+        }
+
+        function tornarInputReadonly(input) {
+            input.setAttribute('readonly', 'readonly');
+            input.style.backgroundColor = '#f9f9f9';
+            input.style.cursor = 'not-allowed';
+        }
+
+        function tornarInputEditavel(input) {
+            input.removeAttribute('readonly');
+            input.style.backgroundColor = '#fff';
+            input.style.cursor = 'text';
+        }
+
+        function deleteImage(attachmentSysId, container) {
+
+            if (!confirm('Deseja excluir esta imagem?')) {
+                return;
+            }
+
+            var ga = new GlideAjax('USDHAttachmentAjaxs');
+            ga.addParam('sysparm_name', 'deleteImage');
+            ga.addParam('sysparm_attachment_sys_id', attachmentSysId);
+
+            ga.getXMLAnswer(function(response) {
+                if (response === 'true') {
+                    container.remove();
+                } else {
+                    alert('Erro ao excluir imagem');
+                }
+            });
+        }
+
+        function loadExistingImages() {
+
+            var ga = new GlideAjax('USDHAttachmentAjaxs');
+            ga.addParam('sysparm_name', 'getImages');
+            ga.addParam('sysparm_record_sys_id', g_form.getUniqueValue());
+            ga.addParam('sysparm_table', g_form.getTableName());
+
+            ga.getXMLAnswer(function(response) {
+
+                if (!response) return;
+
+                var images = JSON.parse(response);
+                images.forEach(function(img) {
+                    renderImage(img.sys_id, img.description);
+                });
+            });
+        }
+
+        function salvarDescricaoImagem(attachmentSysId, descricao, callback) {
+
+            var ga = new GlideAjax('USDHAttachmentAjaxs');
+            ga.addParam('sysparm_name', 'saveDescription');
+            ga.addParam('sysparm_attachment_sys_id', attachmentSysId);
+            ga.addParam('sysparm_description', descricao);
+
+            ga.getXMLAnswer(function(response) {
+                if (callback)
+                    callback(response === 'true');
+            });
+        }
+    </script>
+
+</j:jelly>
