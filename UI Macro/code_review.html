@@ -4,7 +4,7 @@
     <div id="tab-review" class="tab-content">
 
         <!-- ====================== -->
-        <!--   SECTION CODE REVIEW  -->
+        <!--        ESTILOS         -->
         <!-- ====================== -->
         <style>
             table {
@@ -12,17 +12,13 @@
                 border-collapse: collapse;
                 margin-top: 20px;
                 font-size: 13px;
-                table-layout: fixed;
             }
 
             th,
             td {
                 border: 1px solid #ccc;
-                padding: 8px;
+                padding: 10px;
                 text-align: center;
-                white-space: normal;
-                word-break: break-word;
-                overflow-wrap: break-word;
             }
 
             th {
@@ -40,25 +36,24 @@
 
             .table-responsive {
                 width: 100%;
+                overflow-x: auto;
                 margin-top: 20px;
             }
 
             input[type="text"] {
                 width: 100%;
-                padding: 6px;
+                padding: 8px;
                 margin: 5px 0 10px 0;
                 border-radius: 6px;
                 border: 1px solid #ccc;
-                box-sizing: border-box;
             }
 
             button {
-                padding: 8px 16px;
+                padding: 10px 18px;
                 border-radius: 6px;
                 border: none;
                 cursor: pointer;
                 font-weight: bold;
-                font-size: 12px;
             }
 
             #btnBuscar {
@@ -73,12 +68,15 @@
             }
 
             .filters {
-                max-width: 1000px;
+                max-width: 900px;
                 margin: auto;
                 padding: 20px;
             }
         </style>
 
+        <!-- ====================== -->
+        <!--        FILTROS         -->
+        <!-- ====================== -->
         <div class="filters">
 
             <label><b>Filtrar por Type</b></label>
@@ -101,9 +99,9 @@
             <button id="btnBuscar" type="button" onclick="buscarArtefatos()">🔍 Buscar</button>
             <button id="btnSalvar" type="button">💾 Salvar Review</button>
 
-            <hr style="margin:30px 0;border:none;border-top:2px solid #eee;" />
-
-            <div id="errorBoxCode" style="
+			<hr style="margin:30px 0;border:none;border-top:2px solid #eee;" />
+			
+			<div id="errorBoxCode" style="
 				display:none;
 				background:#fdecea;
 				color:#b71c1c;
@@ -113,51 +111,38 @@
 				margin-bottom:15px;
 				font-weight:bold;
 			">
-                Update Set não encontrado.
-            </div>
+				Update Set não encontrado.
+			</div>
 
             <div id="resultado"></div>
         </div>
     </div>
 
+    <!-- ====================== -->
+    <!--        JAVASCRIPT      -->
+    <!-- ====================== -->
     <script>
-        function fetchUpdateSetNames(callback) {
-            var updateSetIds = g_form.getValue('u_update_set') || '';
-
-            var ga = new GlideAjax('GetUpdateSetDocumentation');
-            ga.addParam('sysparm_name', 'getNameUpdateSet');
-            ga.addParam('sysparm_update_set_ids', updateSetIds);
-
-            ga.getXMLAnswer(function(response) {
-                var updateSetNames = response;
-                // Retorna os valores via callback
-                if (callback) callback(updateSetNames);
-            });
-        }
-
         function buscarArtefatos() {
 
+            var updateSet = g_form.getDisplayValue('u_update_set');
             var errorBox = document.getElementById("errorBoxCode");
 
-            fetchUpdateSetNames(function(updateSetNames) {
+			if (!updateSet) {
+				errorBox.style.display = "block";
+				document.getElementById("resultado").innerHTML = "";
+				return;
+			} else {
+				errorBox.style.display = "none";
+			}
 
-                if (!updateSetNames) {
-                    errorBox.style.display = "block";
-                    document.getElementById("resultado").innerHTML = "";
-                    return;
-                } else {
-                    errorBox.style.display = "none";
-                }
+            var ga = new GlideAjax('GetUpdateSetArtifacts');
+            ga.addParam('sysparm_name', 'getArtifacts');
+            ga.addParam('sysparm_updates', updateSet);
+            ga.addParam('sysparm_types', document.getElementById('typeFilter').value);
+            ga.addParam('sysparm_notTypes', document.getElementById('notTypeFilter').value);
+            ga.addParam('sysparm_application', document.getElementById('applicationFilter').value);
 
-                var ga = new GlideAjax('GetUpdateSetArtifacts');
-                ga.addParam('sysparm_name', 'getArtifacts');
-                ga.addParam('sysparm_updates', updateSetNames);
-                ga.addParam('sysparm_types', document.getElementById('typeFilter').value);
-                ga.addParam('sysparm_notTypes', document.getElementById('notTypeFilter').value);
-                ga.addParam('sysparm_application', document.getElementById('applicationFilter').value);
-
-                ga.getXMLAnswer(renderTabela);
-            });
+            ga.getXMLAnswer(renderTabela);
         }
 
         function renderTabela(response) {
@@ -313,7 +298,7 @@
                 var chkPassou = row.querySelector("input[id^='passou_']");
                 var chkNao = row.querySelector("input[id^='naoPassou_']");
                 var comentario = row.querySelector("input[id^='comentario_']");
-                var usdh = g_form.getUniqueValue();
+				var usdh = g_form.getUniqueValue();
 
                 var passou = false;
                 var naoPassou = false;
@@ -337,7 +322,7 @@
                         naoPassou: naoPassou,
                         comentario: comentario ? comentario.value : '',
                         link: row.getAttribute('data-link'),
-                        usdh: usdh
+						usdh: usdh
                     });
                 }
             });

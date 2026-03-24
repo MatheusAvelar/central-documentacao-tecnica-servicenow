@@ -122,28 +122,30 @@
                     document.getElementById("attachBtn").style.display = "inline-block";
                     tornarReadOnly();
                     loadExistingImages();
+					toggleAttachButton();
                 });
             });
         }
 
         addLoadEvent(function() {
             generateDocumentation();
-            toggleAttachButton();
         });
 
         function toggleAttachButton() {
             var btnDoc = document.getElementById('attachBtn');
-			var btnRev = document.getElementById('btnSalvar');
+            var btnRev = document.getElementById('btnSalvar');
 
             if (!btnDoc) return;
 
             var status = g_form.getValue('u_status');
 
-            if (status === 'aprovado') {
-				btnDoc.classList.add('hidden');
-				btnRev.classList.add('hidden');
+            if (status != 'rascunho') {
+                btnDoc.style.display = 'none';
                 g_form.disableAttachments();
             }
+
+			if (status != 'documentacao_concluida')
+				btnRev.style.display = 'none';
         }
 
         /* ================= UPLOAD DE IMAGENS ================= */
@@ -221,6 +223,9 @@
 
         function renderImage(attachmentSysId, description) {
 
+            var status = g_form.getValue('u_status');
+            var readOnlyStatus = (status != 'rascunho');
+
             var container = document.createElement("div");
             container.style.marginBottom = "12px";
 
@@ -248,50 +253,56 @@
             inputText.style.borderRadius = "4px";
             inputText.style.border = "1px solid #ccc";
 
-            if (typeof description === 'string') {
+            if (typeof description === 'string' || readOnlyStatus) {
                 tornarInputReadonly(inputText);
             }
 
-            inputText.ondblclick = function() {
-                tornarInputEditavel(inputText);
-                inputText.focus();
-            };
+            /* Só permite editar se NÃO estiver aprovado */
+            if (!readOnlyStatus) {
 
-            inputText.onblur = function() {
+                inputText.ondblclick = function() {
+                    tornarInputEditavel(inputText);
+                    inputText.focus();
+                };
 
-                if (!inputText.value.trim())
-                    return;
+                inputText.onblur = function() {
 
-                salvarDescricaoImagem(attachmentSysId, inputText.value, function(ok) {
-                    if (ok) {
-                        tornarInputReadonly(inputText);
-                    } else {
-                        alert('Erro ao salvar descrição');
-                    }
-                });
-            };
+                    if (!inputText.value.trim())
+                        return;
+
+                    salvarDescricaoImagem(attachmentSysId, inputText.value, function(ok) {
+                        if (ok) {
+                            tornarInputReadonly(inputText);
+                        } else {
+                            alert('Erro ao salvar descrição');
+                        }
+                    });
+                };
+            }
 
             container.appendChild(inputText);
 
             /* ===== BOTÃO EXCLUIR ===== */
-            var btnDelete = document.createElement('button');
-            btnDelete.type = 'button';
-            btnDelete.innerHTML = ' Excluir';
+            if (!readOnlyStatus) {
+                var btnDelete = document.createElement('button');
+                btnDelete.type = 'button';
+                btnDelete.innerHTML = ' Excluir';
 
-            btnDelete.style.background = '#f44336';
-            btnDelete.style.color = '#fff';
-            btnDelete.style.border = 'none';
-            btnDelete.style.padding = '6px 10px';
-            btnDelete.style.marginTop = '6px';
-            btnDelete.style.cursor = 'pointer';
+                btnDelete.style.background = '#f44336';
+                btnDelete.style.color = '#fff';
+                btnDelete.style.border = 'none';
+                btnDelete.style.padding = '6px 10px';
+                btnDelete.style.marginTop = '6px';
+                btnDelete.style.cursor = 'pointer';
 
-            btnDelete.onclick = function(e) {
-                e.preventDefault();
-                deleteImage(attachmentSysId, container);
-            };
+                btnDelete.onclick = function(e) {
+                    e.preventDefault();
+                    deleteImage(attachmentSysId, container);
+                };
 
-            container.appendChild(btnDelete);
-
+                container.appendChild(btnDelete);
+            }
+			
             document.getElementById('blocoEvidencias').appendChild(container);
         }
 

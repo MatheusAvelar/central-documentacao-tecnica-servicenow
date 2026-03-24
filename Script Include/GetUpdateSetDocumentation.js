@@ -11,7 +11,7 @@ GetUpdateSetDocumentation.prototype = Object.extendsObject(AbstractAjaxProcessor
         // ===== Página Inicial ===== 
         var homeHtml = "";
         homeHtml += "<div style='text-align:center;margin-bottom:25px;padding:25px;background:#f1f8e9;border:1px solid #c5e1a5;border-radius:8px;'>";
-        homeHtml += "  <img src='https://dev355393.service-now.com/c0bf9b4093a6361021cff8eddd03d6a1.iix' alt='Logo' style='width:300px;height:auto;margin-bottom:10px;' />";
+        homeHtml += "  <img src='https://dev355393.service-now.com/0a4bc95b9397b21021cff8eddd03d687.iix' alt='Logo' style='width:300px;height:auto;margin-bottom:10px;' />";
 
         // Título dinâmico baseado no input de Cenário
         homeHtml += "  <h1 id='tituloPrincipal' style='margin:0;font-size:24px;'>Documentação - ServiceNow</h1>";
@@ -80,7 +80,7 @@ GetUpdateSetDocumentation.prototype = Object.extendsObject(AbstractAjaxProcessor
         // ===== Bloco detalhado (sem alteração) =====
         var blocoHtml = "";
         for (var type in updatesByType) {
-            var icon = /*this.getIconByType(type)*/ '';
+            var icon = this.getIconByType(type);
             var displayType = (audience == "po") ? this.getTranslatedTypeName(type) : type;
             var anchor = type.toLowerCase().replace(/\s+/g, "_");
 
@@ -123,17 +123,17 @@ GetUpdateSetDocumentation.prototype = Object.extendsObject(AbstractAjaxProcessor
         }
 
         // ===== Script para atualizar título dinamicamente =====
-        var scriptHtml = "<script>document.addEventListener('DOMContentLoaded', function(){";
+        /*var scriptHtml = "&lt;script&gt;document.addEventListener('DOMContentLoaded', function(){";
         scriptHtml += "var titulo=document.getElementById('tituloPrincipal');";
         scriptHtml += "var inputCenario=document.getElementById('inputCenario');";
         scriptHtml += "if(inputCenario && titulo){";
         scriptHtml += "inputCenario.addEventListener('input',function(){";
         scriptHtml += "var val=inputCenario.value.trim();";
         scriptHtml += "titulo.textContent = val ? 'Documentação - ' + val : '';";
-        scriptHtml += "});}});</script>";
+        scriptHtml += "});}});&lt;/script&gt;";*/
 
         // ===== Retorno Final =====
-        return "<div id='top'>" + homeHtml + headerHtml + summaryHtml + evidenciasHtml + blocoHtml + scriptHtml + "</div>";
+        return "<div id='top'>" + homeHtml + headerHtml + summaryHtml + evidenciasHtml + blocoHtml /*+ scriptHtml */+ "</div>";
     },
 
 
@@ -179,15 +179,38 @@ GetUpdateSetDocumentation.prototype = Object.extendsObject(AbstractAjaxProcessor
 
     getFriendlyName: function(type, gr) {
         var name = gr.name.toString();
-        var sysIdMatch = name.match(/sys_[a-z_]+_([0-9a-f]{32})/);
+        /*var sysIdMatch = name.match(/sys_[a-z_]+_([0-9a-f]{32})/);
+        var sysId = sysIdMatch ? sysIdMatch[1] : null;*/
+        var sysIdMatch = name.match(/([0-9a-f]{32})$/);
         var sysId = sysIdMatch ? sysIdMatch[1] : null;
+        var tableMatch = name.match(/^sys_([a-z0-9_]+)_[0-9a-f]{32}$/);
+        var tableName = tableMatch ? tableMatch[1] : null;
 
         switch (type) {
             case 'Script Include':
-                if (sysId) {
-                    var siGR = new GlideRecord('sys_script_include');
-                    if (siGR.get(sysId)) return siGR.getDisplayValue() + " (" + siGR.name + ")";
+                if (gr.action == 'DELETE') {
+
+                    var fallback = name.replace(/^sys_script_include_/, '');
+
+                    return "Script Include '" + fallback + "' (excluído)";
                 }
+
+                if (sysId) {
+
+                    var siGR = new GlideRecord('sys_script_include');
+
+                    if (siGR.get(sysId)) {
+
+                        var display = siGR.getDisplayValue();
+                        var technical = siGR.name.toString();
+                        var scope = siGR.sys_scope.getDisplayValue();
+
+                        return display +
+                            (technical ? " (" + technical + ")" : "") +
+                            (scope ? " [" + scope + "]" : "");
+                    }
+                }
+
                 return name;
             case 'Business Rule':
                 if (sysId) {
@@ -212,7 +235,545 @@ GetUpdateSetDocumentation.prototype = Object.extendsObject(AbstractAjaxProcessor
                 if (uGR.next()) return uGR.title + " (" + name + ")";
                 return name;
             case 'Field Label':
-                return this.getFriendlyFieldLabel(name);
+                //return this.getFriendlyFieldLabel(name);
+                var docGR = new GlideRecord('sys_documentation');
+                docGR.addQuery('sys_update_name', name);
+                docGR.query();
+
+                if (docGR.next()) {
+
+                    var tableName = docGR.name.toString();
+                    var element = docGR.element.toString();
+                    var label = docGR.label.toString();
+                    var lang = docGR.language.toString();
+
+                    // Label de tabela
+                    if (!element) {
+                        return "Label da tabela '" + tableName +
+                            "' (" + lang + "): " + label;
+                    }
+
+                    // Label de campo
+                    return "Label do campo '" + element +
+                        "' da tabela '" + tableName +
+                        "' (" + lang + "): " + label;
+                }
+
+                var docName = name.replace(/^sys_documentation_/, '');
+
+                // separa idioma (último _)
+                var langIndex = docName.lastIndexOf('_');
+                if (langIndex == -1)
+                    return name;
+
+                var lang = docName.substring(langIndex + 1);
+                var remaining = docName.substring(0, langIndex);
+
+                // tabela (__) ou campo (_u_)
+                if (remaining.indexOf('__') > -1) {
+
+                    var tableNameFallback = remaining.replace('__', '_');
+
+                    return "Label da tabela '" + tableNameFallback +
+                        "' (" + lang + ")";
+                }
+
+                var splitIndex = remaining.lastIndexOf('_u_');
+
+                if (splitIndex > -1) {
+
+                    var tableNameFallback = remaining.substring(0, splitIndex);
+                    var fieldNameFallback = remaining.substring(splitIndex + 1);
+
+                    return "Label do campo '" + fieldNameFallback +
+                        "' da tabela '" + tableNameFallback +
+                        "' (" + lang + ")";
+                }
+
+                return name;
+            case 'Choice list':
+                var parts = name.split('_u_');
+                if (parts.length >= 3) {
+                    var tableName = parts[0].replace(/^sys_documentation_/, '');
+                    var fieldName = parts.slice(1, -1).join('_');
+                    var choiceValue = parts[parts.length - 1];
+                    return "Choice '" + choiceValue + "' para campo '" + fieldName + "' da tabela '" + tableName + "'";
+                }
+                return name;
+            case 'Access Control':
+                if (sysId) {
+                    var aclGR = new GlideRecord('sys_security_acl');
+                    if (aclGR.get(sysId)) {
+
+                        var table = aclGR.name.toString();
+                        var operation = aclGR.operation.toString();
+                        var field = aclGR.field.toString();
+
+                        return aclGR.getDisplayValue() +
+                            " (" + operation + " em " + table +
+                            (field ? "." + field : "") + ")";
+                    }
+                }
+                return name;
+            case 'Access Roles':
+                if (sysId) {
+                    var aclRoleGR = new GlideRecord('sys_security_acl_role');
+                    if (aclRoleGR.get(sysId)) {
+
+                        var acl = aclRoleGR.sys_security_acl.getRefRecord();
+                        var role = aclRoleGR.sys_user_role.getDisplayValue();
+
+                        if (acl.isValidRecord()) {
+                            var table = acl.name.toString();
+                            var operation = acl.operation.toString();
+                            var field = acl.field.toString();
+
+                            return "Role '" + role + "' na ACL " +
+                                acl.getDisplayValue() +
+                                " (" + operation + " em " + table +
+                                (field ? "." + field : "") + ")";
+                        }
+
+                        return "Role '" + role + "' vinculada a ACL";
+                    }
+                }
+                return name;
+            case 'App Install':
+                if (sysId) {
+                    var upgradeGR = new GlideRecord('sys_upgrade_plan_item');
+                    if (upgradeGR.get(sysId)) {
+
+                        var appName = '';
+                        if (upgradeGR.name)
+                            appName = upgradeGR.name.getDisplayValue();
+
+                        var type = upgradeGR.type.toString();
+
+                        var actionLabel = (type == 'install') ? 'Instalação' : 'Upgrade';
+
+                        return actionLabel + " do App '" + appName + "'";
+                    }
+                }
+                return name;
+            case 'Application Menu':
+                if (sysId && tableName) {
+
+                    if (tableName == 'app_application') {
+
+                        var appMenuGR = new GlideRecord('sys_app_application');
+                        if (appMenuGR.get(sysId)) {
+
+                            var title = appMenuGR.title.toString();
+                            var name = appMenuGR.name.toString();
+                            var scope = appMenuGR.sys_scope.getDisplayValue();
+
+                            return "Menu da aplicação '" + title + "'" +
+                                (scope ? " (" + scope + ")" : "") +
+                                " [" + name + "]";
+                        }
+                    }
+
+                    if (tableName == 'ui_application') {
+
+                        var uiAppGR = new GlideRecord('sys_ui_application');
+                        if (uiAppGR.get(sysId)) {
+
+                            var uiName = uiAppGR.name.toString();
+                            var uiScope = uiAppGR.sys_scope.getDisplayValue();
+
+                            return "Interface da aplicação '" + uiName + "'" +
+                                (uiScope ? " (" + uiScope + ")" : "") +
+                                " [" + uiName + "]";
+                        }
+                    }
+                }
+                return name;
+            case 'Custom Application':
+                if (sysId) {
+
+                    var appGR = new GlideRecord('sys_app');
+                    if (appGR.get(sysId)) {
+
+                        var name = appGR.name.toString();
+                        var version = appGR.version.toString();
+
+                        return "Aplicação '" + name + "'" +
+                            (version ? " v" + version : "");
+                    }
+                }
+                return name;
+            case 'Dictionary':
+                var dictGR = new GlideRecord('sys_dictionary');
+                dictGR.addQuery('sys_update_name', name);
+                dictGR.query();
+
+                if (dictGR.next()) {
+
+                    var tableName = dictGR.name.toString();
+                    var fieldName = dictGR.element.toString();
+                    var label = dictGR.column_label.toString();
+
+                    if (!fieldName) {
+
+                        var tableGR = new GlideRecord('sys_db_object');
+                        if (tableGR.get('name', tableName))
+                            return "Definição da tabela '" + tableGR.getDisplayValue() + "'";
+
+                        return "Definição da tabela '" + tableName + "'";
+                    }
+
+                    return "Campo '" + label +
+                        "' (" + fieldName + ") da tabela '" + tableName + "'";
+                }
+
+                var dictName = name.replace(/^sys_dictionary_/, '');
+
+                var splitIndex = dictName.lastIndexOf('_u_');
+
+                if (splitIndex > -1) {
+
+                    var tableNameFallback = dictName.substring(0, splitIndex);
+                    var fieldNameFallback = dictName.substring(splitIndex + 1);
+
+                    if (fieldNameFallback == 'null')
+                        return "Definição da tabela '" + tableNameFallback + "'";
+
+                    return "Campo '" + fieldNameFallback +
+                        "' da tabela '" + tableNameFallback + "'";
+                }
+
+                return name;
+            case 'Form Layout':
+
+                var sectionGR = new GlideRecord('sys_ui_section');
+
+                if (sectionGR.get(sysId)) {
+
+                    var tableLabel = sectionGR.name.getDisplayValue();
+                    var viewName = sectionGR.view_name || "Default view";
+
+                    // Não é seção visível
+                    if (!sectionGR.caption) {
+                        return "Layout interno do formulário '" +
+                            tableLabel + "' (view: " + viewName + ")";
+                    }
+
+                    var sectionTitle =
+                        sectionGR.title ||
+                        sectionGR.caption ||
+                        "Sem título";
+
+                    return "Seção '" + sectionTitle +
+                        "' do formulário '" + tableLabel +
+                        "' (view: " + viewName + ")";
+                }
+
+                return name;
+            case 'Form Sections':
+
+                var formSectionsGR = new GlideRecord('sys_ui_form');
+
+                if (formSectionsGR.get(sysId)) {
+
+                    var tableLabel = formSectionsGR.name.getDisplayValue();
+                    var viewName = formSectionsGR.view || "Default view";
+
+                    return "Configuração de seções do formulário '" +
+                        tableLabel + "' (view: " + viewName + ")";
+                }
+
+                return name;
+            case 'Macro':
+
+                if (sysId) {
+
+                    var macroGR = new GlideRecord('sys_ui_macro');
+
+                    // Registro ainda existe
+                    if (macroGR.get(sysId)) {
+
+                        var macroName = macroGR.name.toString();
+                        var scope = macroGR.sys_scope.getDisplayValue();
+
+                        return "UI Macro '" + macroName + "'" +
+                            (scope ? " (" + scope + ")" : "");
+                    }
+                }
+
+                var macroNameFallback = name.replace(/^sys_ui_macro_/, '');
+
+                return "UI Macro '" + macroNameFallback + "' (excluída)";
+            case 'Module':
+                if (gr.action == 'DELETE') {
+                    var fallback = name.replace(/^sys_(app|ui)_module_/, '');
+                    return "Módulo '" + fallback + "' (excluído)";
+                }
+
+                if (sysId) {
+
+                    var moduleGR = new GlideRecord('sys_app_module');
+
+                    // tenta primeiro tabela moderna
+                    if (!moduleGR.get(sysId)) {
+                        moduleGR = new GlideRecord('sys_ui_module');
+                        moduleGR.get(sysId);
+                    }
+
+                    if (moduleGR.isValidRecord()) {
+
+                        var title = moduleGR.title || moduleGR.name;
+                        var appName = moduleGR.application.getDisplayValue();
+                        var scope = moduleGR.sys_scope.getDisplayValue();
+
+                        return "Módulo '" + title + "'" +
+                            (appName ? " da aplicação '" + appName + "'" : "") +
+                            (scope ? " (" + scope + ")" : "");
+                    }
+                }
+
+                return name;
+            case 'Number':
+
+                if (sysId) {
+
+                    var numGR = new GlideRecord('sys_number');
+
+                    if (numGR.get(sysId)) {
+
+                        var tableLabel = numGR.category.getDisplayValue();
+                        var prefix = numGR.prefix;
+
+                        return "Numeração automática da tabela '" +
+                            tableLabel + "'" +
+                            (prefix ? " (prefixo: " + prefix + ")" : "");
+                    }
+                }
+
+                return name;
+            case 'Role':
+
+                if (gr.action == 'DELETE') {
+                    var fallback = name.replace(/^sys_user_role_/, '');
+                    return "Role '" + fallback + "' (excluída)";
+                }
+
+                if (sysId) {
+
+                    var roleGR = new GlideRecord('sys_user_role');
+
+                    if (roleGR.get(sysId)) {
+
+                        var roleName = roleGR.name.toString();
+                        var scope = roleGR.sys_scope.getDisplayValue();
+                        var desc = roleGR.description;
+
+                        return "Role '" + roleName + "'" +
+                            (desc ? " — " + desc : "") +
+                            (scope ? " (" + scope + ")" : "");
+                    }
+                }
+
+                return name;
+            case 'System Property':
+                if (gr.action == 'DELETE') {
+                    var fallback = name.replace(/^sys_properties_/, '');
+                    return "System Property '" + fallback + "' (excluída)";
+                }
+
+                if (sysId) {
+
+                    var propGR = new GlideRecord('sys_properties');
+
+                    if (propGR.get(sysId)) {
+
+                        var propName = propGR.name.toString();
+                        var scope = propGR.sys_scope.getDisplayValue();
+                        var desc = propGR.description;
+
+                        return "System Property '" + propName + "'" +
+                            (desc ? " — " + desc : "") +
+                            (scope ? " (" + scope + ")" : "");
+                    }
+                }
+
+                return name;
+            case 'UI Action':
+
+                if (gr.action == 'DELETE') {
+
+                    var fallback = name.replace(/^sys_ui_action_/, '');
+
+                    return "UI Action '" + fallback + "' (excluída)";
+                }
+
+                if (sysId) {
+
+                    var actionGR = new GlideRecord('sys_ui_action');
+
+                    if (actionGR.get(sysId)) {
+
+                        var label = actionGR.name.toString();
+                        var tableLabel = actionGR.table.getDisplayValue();
+                        var scope = actionGR.sys_scope.getDisplayValue();
+
+                        var location = "";
+
+                        if (actionGR.form_button == true)
+                            location = " (formulário)";
+                        else if (actionGR.list_button == true)
+                            location = " (lista)";
+
+                        return "UI Action '" + label + "'" +
+                            (tableLabel ? " na tabela '" + tableLabel + "'" : "") +
+                            location +
+                            (scope ? " (" + scope + ")" : "");
+                    }
+                }
+
+                return name;
+            case 'UI Formatter':
+                if (gr.action == 'DELETE') {
+                    var fallback = name.replace(/^sys_ui_formatter_/, '');
+                    return "UI Formatter '" + fallback + "' (excluído)";
+                }
+
+                if (sysId) {
+
+                    var fmtGR = new GlideRecord('sys_ui_formatter');
+
+                    if (fmtGR.get(sysId)) {
+
+                        var formatter = fmtGR.formatter.toString();
+                        var table = fmtGR.table.getDisplayValue();
+                        var scope = fmtGR.sys_scope.getDisplayValue();
+
+                        return "UI Formatter '" + formatter + "'" +
+                            (table ? " no formulário '" + table + "'" : "") +
+                            (scope ? " (" + scope + ")" : "");
+                    }
+                }
+
+                return name;
+            case 'UI Formatter':
+
+                if (gr.action == 'DELETE') {
+                    var fallback = name.replace(/^sys_ui_formatter_/, '');
+                    return "UI Formatter '" + fallback + "' (excluído)";
+                }
+
+                if (sysId) {
+
+                    var fmtGR = new GlideRecord('sys_ui_formatter');
+
+                    if (fmtGR.get(sysId)) {
+
+                        var formatter = fmtGR.formatter.toString();
+                        var table = fmtGR.table.getDisplayValue();
+                        var scope = fmtGR.sys_scope.getDisplayValue();
+
+                        return "UI Formatter '" + formatter + "'" +
+                            (table ? " no formulário '" + table + "'" : "") +
+                            (scope ? " (" + scope + ")" : "");
+                    }
+                }
+
+                return name;
+            case 'UX App Theme':
+
+                if (!name.startsWith('m2m_app_config_theme_'))
+                    return name;
+
+                if (gr.action == 'DELETE') {
+
+                    var fallback = name.replace(/^m2m_app_config_theme_/, '');
+
+                    return "Tema UX '" + fallback + "' desvinculado";
+                }
+
+                if (sysId) {
+
+                    var themeGR = new GlideRecord('m2m_app_config_theme');
+
+                    if (themeGR.get(sysId)) {
+
+                        var app = themeGR.ux_app_configuration.getDisplayValue();
+                        var theme = themeGR.theme.getDisplayValue();
+                        var scope = themeGR.sys_scope.getDisplayValue();
+
+                        return "Tema '" + theme +
+                            "' aplicado à experiência '" + app + "'" +
+                            (scope ? " (" + scope + ")" : "");
+                    }
+                }
+
+                return name;
+            case 'UI Action Role':
+
+                if (gr.action == 'DELETE') {
+
+                    var actionName = '';
+                    var roleName = '';
+
+                    if (gr.payload) {
+                        var xml = new XMLDocument2();
+                        xml.parseXML(gr.payload);
+
+                        actionName = xml.getNodeText('//ui_action/display_value');
+                        roleName = xml.getNodeText('//role/display_value');
+                    }
+
+                    return "Permissão da role '" + (roleName || '?') +
+                        "' removida da UI Action '" + (actionName || '?') + "'";
+                }
+
+                if (sysId) {
+
+                    var relGR = new GlideRecord('sys_ui_action_role');
+
+                    if (relGR.get(sysId)) {
+
+                        var actionName = relGR.ui_action.getDisplayValue();
+                        var roleName = relGR.role.getDisplayValue();
+
+                        return "UI Action '" + actionName +
+                            "' vinculada à role '" + roleName + "'";
+                    }
+                }
+
+                return name;
+            case 'Password Reset Process':
+                
+                if (gr.action == 'DELETE') {
+
+                    var processName = '';
+
+                    if (gr.payload) {
+                        var xml = new XMLDocument2();
+                        xml.parseXML(gr.payload);
+
+                        processName = xml.getNodeText('//name') ||
+                                    xml.getNodeText('//display_value');
+                    }
+
+                    return "Processo de redefinição de senha '" +
+                        (processName || name) + "' removido";
+                }
+
+                if (sysId) {
+
+                    var pwdGR = new GlideRecord('pwd_process');
+
+                    if (pwdGR.get(sysId)) {
+
+                        var display = pwdGR.getDisplayValue();
+                        var internal = pwdGR.name.toString();
+
+                        return "Processo de redefinição de senha '" +
+                            display + "' (" + internal + ")";
+                    }
+                }
+
+                return name;
             default:
                 return name;
         }

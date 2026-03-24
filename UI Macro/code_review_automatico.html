@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<j:jelly trim="false" xmlns:j="jelly:core" xmlns:g="glide">
+
+    <style>
+        .review-box {
+            background: #fff;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+
+        .review-summary {
+            margin-bottom: 12px;
+            font-weight: bold;
+        }
+
+        .review-summary span {
+            cursor: pointer;
+        }
+
+        .review-error {
+            color: #d9534f;
+            font-weight: bold;
+        }
+
+        .review-warning {
+            color: #f0ad4e;
+            font-weight: bold;
+        }
+
+        .review-info {
+            color: #5bc0de;
+            font-weight: bold;
+        }
+
+        .review-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .review-table th,
+        .review-table td {
+            border-bottom: 1px solid #eee;
+            padding: 6px 8px;
+            text-align: left;
+        }
+
+        .review-help {
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: #555;
+        }
+
+        .review-link {
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .review-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+
+    <div class="review-box">
+        <h4> Code Review Automático</h4>
+    </div>
+
+    <script>
+        function runReview() {
+
+            var box = document.querySelector('.review-box');
+            if (!box) return;
+
+            var output = document.createElement('div');
+            output.id = 'resultado_dynamic';
+            output.innerHTML = 'Analisando... ⏳';
+            output.style.marginTop = '10px';
+
+            box.appendChild(output);
+
+            var id = g_form.getValue('u_update_set');
+
+            var ga = new GlideAjax('CodeReviewEngine');
+            ga.addParam('sysparm_name', 'analyzeUpdateSets');
+            ga.addParam('sysparm_update_set', id);
+
+            ga.getXMLAnswer(function(response) {
+
+                try {
+
+                    var data = JSON.parse(response);
+
+                    if (Array.isArray(data)) {
+                        renderResults({
+                            errors: 0,
+                            warnings: 0,
+                            info: 0,
+                            findings: data
+                        }, output);
+                    } else {
+                        renderResults(data, output);
+                    }
+
+                } catch (e) {
+                    output.innerHTML = response;
+                }
+            });
+        }
+
+        function renderResults(data, container) {
+
+            var results = data.findings || [];
+            var errors = data.errors || 0;
+            var warnings = data.warnings || 0;
+            var info = data.info || 0;
+
+            container.replaceChildren();
+
+            if (!results.length) {
+                container.insertAdjacentHTML(
+                    'beforeend',
+                    '<div class="review-info">✅ Nenhum problema encontrado</div>'
+                );
+                return;
+            }
+
+            var explanations = {
+
+                'Uso de gs.print ou gs.log': 'Logs de debug em produção poluem o log do sistema, impactam performance e dificultam troubleshooting. Use gs.info apenas quando necessário.',
+
+                'Uso de eval()': 'eval executa código dinâmico e pode abrir falhas graves de segurança, além de dificultar manutenção. Prefira funções ou objetos.',
+
+                'GlideRecord sem filtro': 'Executar GlideRecord sem addQuery/get pode carregar a tabela inteira, causando lentidão e alto consumo de memória. Sempre filtre os dados.',
+
+                'GlideAggregate sem filtro': 'GlideAggregate sem filtros pode fazer full table scan. Adicione condições para limitar o volume processado.',
+
+                'updateMultiple sem filtro': 'updateMultiple sem query pode atualizar TODOS os registros da tabela, gerando corrupção de dados ou incidentes graves.',
+
+                'insert() sem initialize()': 'Sem initialize() o registro pode herdar valores antigos do objeto GlideRecord. Sempre inicialize antes de inserir.',
+
+                'Business Rule não deve usar current.update()': 'Usar current.update() em Business Rule pode gerar loop infinito e impacto de performance. Prefira before rules ou setValue direto.',
+
+                'Possível ACL bypass: setWorkflow(false) + update()': 'setWorkflow(false) desativa regras e validações. Pode contornar ACLs e causar inconsistência de dados. Use somente quando estritamente necessário.',
+
+                'Uso de gs.eventQueue(): valide necessidade': 'Eventos geram processamento assíncrono adicional. Uso excessivo pode degradar performance e aumentar filas desnecessárias.',
+
+                'Possível sys_id hardcoded': 'Sys_id fixo quebra ao mover código entre ambientes (DEV/HML/PRD). Prefira buscar dinamicamente por query ou propriedade.',
+
+                'Use gr.get(sys_id) para busca direta': 'get(sys_id) é mais rápido e eficiente que addQuery para buscar um único registro específico.',
+
+                'Prefira gs.nil()': 'Comparar com null manualmente pode falhar em strings vazias. gs.nil() trata null, undefined e vazio corretamente.',
+
+                'Ausência de try/catch': 'Sem tratamento de erro, falhas podem interromper processos críticos ou jobs. Envolva blocos sensíveis com try/catch.',
+
+                'Script muito grande': 'Scripts extensos são difíceis de manter e testar. Considere quebrar em Script Includes menores ou funções reutilizáveis.',
+
+                'Alta complexidade': 'Muitos níveis de if/loops aumentam a complexidade ciclomática, dificultando leitura e manutenção. Simplifique ou extraia funções.',
+
+                'Uso repetido de g_form.getValue()': 'Chamadas repetidas ao g_form degradam performance no client. Armazene o valor em variável e reutilize.'
+            };
+
+            var html = '<div class="review-summary">';
+            html += '<span id="toggle-errors">🔴 ' + errors + ' Erros</span> ';
+            html += '<span id="toggle-warnings">🟡 ' + warnings + ' Avisos</span> ';
+            html += '<span id="toggle-info">🔵 ' + info + ' Info</span>';
+            html += '</div>';
+
+            html += '<div class="review-help">Clique nos ícones 🔴🟡🔵 para mostrar/ocultar os itens de cada tipo</div>';
+
+            html += '<table class="review-table">';
+            html += '<thead><tr>';
+            html += '<th>Tipo</th><th>Tipo Objeto</th><th>Objeto</th><th>Mensagem</th><th>Explicação</th>';
+            html += '</tr></thead><tbody>';
+
+            results.forEach(function(r) {
+
+                var cls =
+                    r.type === 'error' ? 'review-error' :
+                    r.type === 'warning' ? 'review-warning' :
+                    'review-info';
+
+                var tipoTexto =
+                    r.type === 'error' ? 'ERRO' :
+                    r.type === 'warning' ? 'AVISO' :
+                    'INFO';
+
+                var messageKey = r.message
+                    .replace(/\(\d+ linhas?\)/i, '')
+                    .replace(/\(linha \d+\)/i, '')
+                    .replace(/\(\d+\)/, '')
+                    .trim();
+
+                var explanation = explanations[messageKey] || '';
+
+                html += '<tr class="toggle-' + r.type + '">';
+                html += '<td class="' + cls + '">' + tipoTexto + '</td>';
+                html += '<td>' + (r.record_type || '') + '</td>';
+                html += '<td><a href="' + r.link + '" target="_blank" class="review-link">' + r.object + '</a></td>';
+                html += '<td>' + r.message + '</td>';
+                html += '<td>' + explanation + '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+
+            container.insertAdjacentHTML('beforeend', html);
+
+            toggleGroup('errors', 'error');
+            toggleGroup('warnings', 'warning');
+            toggleGroup('info', 'info');
+        }
+
+        function toggleGroup(id, type) {
+
+            var btn = document.getElementById('toggle-' + id);
+            if (!btn) return;
+
+            document.querySelectorAll('.toggle-' + type)
+                .forEach(function(tr) {
+                    tr.style.display = 'none';
+                });
+
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.toggle-' + type)
+                    .forEach(function(tr) {
+                        tr.style.display = tr.style.display === 'none' ? '' : 'none';
+                    });
+            });
+        }
+
+        addLoadEvent(function() {
+            setTimeout(runReview, 400);
+        });
+    </script>
+
+</j:jelly>

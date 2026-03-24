@@ -98,46 +98,7 @@ GetUpdateSetArtifacts.prototype = Object.extendsObject(AbstractAjaxProcessor, {
                 gr.addQuery('u_link_do_artefato', item.link);
                 gr.query();
 
-				gs.log(gr.getEncodedQuery());
-
-                // ========================
-                // UPDATE
-                // ========================
-                if (gr.next()) {
-
-                    gr.u_code_review = codeReviewSysId;
-                    gr.u_nome_do_artefato_target_name = item.name;
-                    gr.u_action_do_artefato = item.action;
-                    gr.u_tipo_de_artefato = item.type;
-                    gr.u_nome_do_update_set = item.updateSet;
-                    gr.u_nome_da_aplicacao = item.application;
-                    gr.u_passou_no_review = item.passou;
-                    gr.u_nao_passou_no_review = item.naoPassou;
-                    gr.u_comentario = item.comentario;
-
-                    gr.update();
-
-                }
-                // ========================
-                // INSERT
-                // ========================
-                else {
-
-                    gr.initialize();
-
-                    gr.u_code_review = codeReviewSysId;
-                    gr.u_link_do_artefato = item.link;
-                    gr.u_nome_do_artefato_target_name = item.name;
-                    gr.u_action_do_artefato = item.action;
-                    gr.u_tipo_de_artefato = item.type;
-                    gr.u_nome_do_update_set = item.updateSet;
-                    gr.u_nome_da_aplicacao = item.application;
-                    gr.u_passou_no_review = item.passou;
-                    gr.u_nao_passou_no_review = item.naoPassou;
-                    gr.u_comentario = item.comentario;
-
-                    gr.insert();
-                }
+                this._saveArtifact(gr, item, codeReviewSysId);
 
             });
 
@@ -185,6 +146,33 @@ GetUpdateSetArtifacts.prototype = Object.extendsObject(AbstractAjaxProcessor, {
         return '';
     },
 
+    _saveArtifact: function(gr, item, codeReviewSysId) {
+        var fields = {
+            u_code_review: codeReviewSysId,
+            u_nome_do_artefato_target_name: item.name,
+            u_action_do_artefato: item.action,
+            u_tipo_de_artefato: item.type,
+            u_nome_do_update_set: item.updateSet,
+            u_nome_da_aplicacao: item.application,
+            u_passou_no_review: item.passou,
+            u_nao_passou_no_review: item.naoPassou,
+            u_comentario: item.comentario
+        };
+
+        if (gr.next()) {
+            Object.keys(fields).forEach(function(f) {
+                gr[f] = fields[f];
+            });
+            gr.update();
+        } else {
+            gr.initialize();
+            gr.u_link_do_artefato = item.link;
+            Object.keys(fields).forEach(function(f) {
+                gr[f] = fields[f];
+            });
+            gr.insert();
+        }
+    },
 
     type: 'GetUpdateSetArtifacts'
 });

@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <j:jelly trim="false" xmlns:j="jelly:core" xmlns:g="glide">
 
-    <!-- ====================== -->
-    <!--  SECTION INSTANCE SCAN -->
-    <!-- ====================== -->
     <style>
         .instance-scan-container {
             max-width: 900px;
@@ -46,20 +43,6 @@
     </div>
 
     <script>
-		function fetchUpdateSetNames(callback) {
-            var updateSetIds = g_form.getValue('u_update_set') || '';
-
-            var ga = new GlideAjax('GetUpdateSetDocumentation');
-            ga.addParam('sysparm_name', 'getNameUpdateSet');
-            ga.addParam('sysparm_update_set_ids', updateSetIds);
-
-            ga.getXMLAnswer(function(response) {
-                var updateSetNames = response;
-                // Retorna os valores via callback
-                if (callback) callback(updateSetNames);
-            });
-        }
-
         function executarScan() {
 
             if (typeof g_form === 'undefined') {
@@ -67,28 +50,25 @@
             }
 
             var result = document.getElementById("scanResult");
+            var updateSet = g_form.getDisplayValue('u_update_set');
             var errorBox = document.getElementById("errorBoxScan");
 
-            fetchUpdateSetNames(function(updateSetNames) {
+            if (!updateSet) {
+                errorBox.style.display = "block";
+                result.innerHTML = "";
+                return;
+            } else {
+                errorBox.style.display = "none";
+            }
 
-                if (!updateSetNames) {
-                    errorBox.style.display = "block";
-                    result.innerHTML = "";
-                    return;
-                } else {
-                    errorBox.style.display = "none";
-                }
+            result.innerHTML = "<em>Executando scan...</em>";
 
-                result.innerHTML = "<em>Executando scan...</em>";
+            var ga = new GlideAjax("GetInstanceScanResults");
+            ga.addParam("sysparm_name", "runScan");
+            ga.addParam("sysparm_update_set", updateSet);
 
-                var ga = new GlideAjax("GetInstanceScanResults");
-                ga.addParam("sysparm_name", "runScan");
-                ga.addParam("sysparm_update_set", updateSetNames);
-
-                ga.getXMLAnswer(function(response) {
-                    result.innerHTML = response || "Nenhum resultado.";
-                });
-
+            ga.getXMLAnswer(function(response) {
+                result.innerHTML = response || "Nenhum resultado.";
             });
         }
 
@@ -97,6 +77,7 @@
 
                 var detailsDiv = document.getElementById("findingDetails");
 
+                // feedback visual
                 detailsDiv.innerHTML = "<em>Carregando findings...</em>";
 
                 var ga = new GlideAjax("GetInstanceScanResults");
@@ -110,6 +91,9 @@
 
         }
 
+        // =============================
+        // EXECUTA AUTOMATICAMENTE
+        // =============================
         addLoadEvent(function() {
             executarScan();
         });

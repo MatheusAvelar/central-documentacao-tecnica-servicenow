@@ -126,16 +126,10 @@ USDHAttachmentAjaxs.prototype = Object.extendsObject(AbstractAjaxProcessor, {
             if (jf.next()) {
 
                 var texto = jf.value.toString();
-
                 // remove o prefixo
                 texto = texto.replace('[USDH_ATTACHMENT] ', '');
-
-                try {
-                    var obj = JSON.parse(texto);
-                    description = obj.desc || '';
-                } catch (e) {
-                    gs.error('Erro parseando journal: ' + e.message);
-                }
+				var obj = JSON.parse(texto);
+				description = obj.desc || '';
             }
 
             result.push({

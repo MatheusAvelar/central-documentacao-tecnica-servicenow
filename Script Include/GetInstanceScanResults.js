@@ -7,7 +7,7 @@ GetInstanceScanResults.prototype = Object.extendsObject(AbstractAjaxProcessor, {
 
         var html = "";
         html += "<div id='instanceScanHtml' style='background:#f9f9f9;border:1px solid #ddd;border-radius:8px;padding:12px 16px;margin-bottom:20px;'>";
-        html += "<h3 style='margin-top:0;color:#0d47a1;'>Instance Scan</h3>";
+        html += "<h3 style='margin-top:0;color:#0d47a1;'>🔎 Instance Scan</h3>";
         html += "<p style='font-size:13px;color:#555;margin-bottom:10px;'>Clique no número do Scan para ver os Findings.</p>";
 
         html += "<table style='width:100%;border-collapse:collapse;font-size:14px;margin-top:10px;'>";
@@ -18,7 +18,7 @@ GetInstanceScanResults.prototype = Object.extendsObject(AbstractAjaxProcessor, {
 
         // Buscar update set
         var us = new GlideRecord('sys_update_set');
-        us.addQuery('name', 'IN', updateSetName);
+        us.addQuery('name', updateSetName);
         us.query();
         if (!us.next()) {
             html += "<tr><td colspan='2' style='text-align:center;padding:10px;color:#555;'>Update Set não encontrado</td></tr>";
@@ -90,7 +90,7 @@ GetInstanceScanResults.prototype = Object.extendsObject(AbstractAjaxProcessor, {
 
         var html = "";
         html += "<div style='margin-top:20px;background:#ffffff;border:1px solid #ddd;border-radius:8px;padding:12px;'>"
-        html += "<h3 style='color:#0d47a1;margin-top:0;'>Findings</h3>";
+        html += "<h3 style='color:#0d47a1;margin-top:0;'>📌 Findings</h3>";
 
         var f = new GlideRecord("scan_finding");
         f.addQuery("result", scanId);

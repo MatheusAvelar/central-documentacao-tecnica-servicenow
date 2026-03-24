@@ -1,0 +1,1144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<unload unload_date="2026-03-24 18:42:07">
+<sys_ui_macro action="INSERT_OR_UPDATE">
+<active>true</active>
+<category>general</category>
+<description/>
+<media_type/>
+<name>code_review_automatico</name>
+<scoped_name/>
+<sys_class_name>sys_ui_macro</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2026-03-03 11:44:36</sys_created_on>
+<sys_id>31f8641b9393b21021cff8eddd03d642</sys_id>
+<sys_mod_count>0</sys_mod_count>
+<sys_name>code_review_automatico</sys_name>
+<sys_package display_value="Global" source="global">global</sys_package>
+<sys_policy/>
+<sys_scope display_value="Global">global</sys_scope>
+<sys_update_name>sys_ui_macro_31f8641b9393b21021cff8eddd03d642</sys_update_name>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2026-03-03 11:44:36</sys_updated_on>
+<xml><![CDATA[<?xml version="1.0" encoding="utf-8" ?>
+<j:jelly trim="false" xmlns:j="jelly:core" xmlns:g="glide">
+
+    <style>
+        .review-box {
+            background: #fff;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+
+        .review-summary {
+            margin-bottom: 12px;
+            font-weight: bold;
+        }
+
+        .review-summary span {
+            cursor: pointer;
+        }
+
+        .review-error {
+            color: #d9534f;
+            font-weight: bold;
+        }
+
+        .review-warning {
+            color: #f0ad4e;
+            font-weight: bold;
+        }
+
+        .review-info {
+            color: #5bc0de;
+            font-weight: bold;
+        }
+
+        .review-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .review-table th,
+        .review-table td {
+            border-bottom: 1px solid #eee;
+            padding: 6px 8px;
+            text-align: left;
+        }
+
+        .review-help {
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: #555;
+        }
+
+        .review-link {
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .review-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+
+    <div class="review-box">
+        <h4> Code Review Automático</h4>
+    </div>
+
+    <script>
+        function runReview() {
+
+            var box = document.querySelector('.review-box');
+            if (!box) return;
+
+            var output = document.createElement('div');
+            output.id = 'resultado_dynamic';
+            output.innerHTML = 'Analisando... ⏳';
+            output.style.marginTop = '10px';
+
+            box.appendChild(output);
+
+            var id = g_form.getValue('u_update_set');
+
+            var ga = new GlideAjax('CodeReviewEngine');
+            ga.addParam('sysparm_name', 'analyzeUpdateSets');
+            ga.addParam('sysparm_update_set', id);
+
+            ga.getXMLAnswer(function(response) {
+
+                try {
+
+                    var data = JSON.parse(response);
+
+                    if (Array.isArray(data)) {
+                        renderResults({
+                            errors: 0,
+                            warnings: 0,
+                            info: 0,
+                            findings: data
+                        }, output);
+                    } else {
+                        renderResults(data, output);
+                    }
+
+                } catch (e) {
+                    output.innerHTML = response;
+                }
+            });
+        }
+
+        function renderResults(data, container) {
+
+            var results = data.findings || [];
+            var errors = data.errors || 0;
+            var warnings = data.warnings || 0;
+            var info = data.info || 0;
+
+            container.replaceChildren();
+
+            if (!results.length) {
+                container.insertAdjacentHTML(
+                    'beforeend',
+                    '<div class="review-info">✅ Nenhum problema encontrado</div>'
+                );
+                return;
+            }
+
+            var explanations = {
+
+                'Uso de gs.print ou gs.log': 'Logs de debug em produção poluem o log do sistema, impactam performance e dificultam troubleshooting. Use gs.info apenas quando necessário.',
+
+                'Uso de eval()': 'eval executa código dinâmico e pode abrir falhas graves de segurança, além de dificultar manutenção. Prefira funções ou objetos.',
+
+                'GlideRecord sem filtro': 'Executar GlideRecord sem addQuery/get pode carregar a tabela inteira, causando lentidão e alto consumo de memória. Sempre filtre os dados.',
+
+                'GlideAggregate sem filtro': 'GlideAggregate sem filtros pode fazer full table scan. Adicione condições para limitar o volume processado.',
+
+                'updateMultiple sem filtro': 'updateMultiple sem query pode atualizar TODOS os registros da tabela, gerando corrupção de dados ou incidentes graves.',
+
+                'insert() sem initialize()': 'Sem initialize() o registro pode herdar valores antigos do objeto GlideRecord. Sempre inicialize antes de inserir.',
+
+                'Business Rule não deve usar current.update()': 'Usar current.update() em Business Rule pode gerar loop infinito e impacto de performance. Prefira before rules ou setValue direto.',
+
+                'Possível ACL bypass: setWorkflow(false) + update()': 'setWorkflow(false) desativa regras e validações. Pode contornar ACLs e causar inconsistência de dados. Use somente quando estritamente necessário.',
+
+                'Uso de gs.eventQueue(): valide necessidade': 'Eventos geram processamento assíncrono adicional. Uso excessivo pode degradar performance e aumentar filas desnecessárias.',
+
+                'Possível sys_id hardcoded': 'Sys_id fixo quebra ao mover código entre ambientes (DEV/HML/PRD). Prefira buscar dinamicamente por query ou propriedade.',
+
+                'Use gr.get(sys_id) para busca direta': 'get(sys_id) é mais rápido e eficiente que addQuery para buscar um único registro específico.',
+
+                'Prefira gs.nil()': 'Comparar com null manualmente pode falhar em strings vazias. gs.nil() trata null, undefined e vazio corretamente.',
+
+                'Ausência de try/catch': 'Sem tratamento de erro, falhas podem interromper processos críticos ou jobs. Envolva blocos sensíveis com try/catch.',
+
+                'Script muito grande': 'Scripts extensos são difíceis de manter e testar. Considere quebrar em Script Includes menores ou funções reutilizáveis.',
+
+                'Alta complexidade': 'Muitos níveis de if/loops aumentam a complexidade ciclomática, dificultando leitura e manutenção. Simplifique ou extraia funções.',
+
+                'Uso repetido de g_form.getValue()': 'Chamadas repetidas ao g_form degradam performance no client. Armazene o valor em variável e reutilize.'
+            };
+
+            var html = '<div class="review-summary">';
+            html += '<span id="toggle-errors">]]>🔴<![CDATA[ ' + errors + ' Erros</span> ';
+            html += '<span id="toggle-warnings">]]>🟡<![CDATA[ ' + warnings + ' Avisos</span> ';
+            html += '<span id="toggle-info">]]>🔵<![CDATA[ ' + info + ' Info</span>';
+            html += '</div>';
+
+            html += '<div class="review-help">Clique nos ícones ]]>🔴🟡🔵<![CDATA[ para mostrar/ocultar os itens de cada tipo</div>';
+
+            html += '<table class="review-table">';
+            html += '<thead><tr>';
+            html += '<th>Tipo</th><th>Tipo Objeto</th><th>Objeto</th><th>Mensagem</th><th>Explicação</th>';
+            html += '</tr></thead><tbody>';
+
+            results.forEach(function(r) {
+
+                var cls =
+                    r.type === 'error' ? 'review-error' :
+                    r.type === 'warning' ? 'review-warning' :
+                    'review-info';
+
+                var tipoTexto =
+                    r.type === 'error' ? 'ERRO' :
+                    r.type === 'warning' ? 'AVISO' :
+                    'INFO';
+
+                var messageKey = r.message
+                    .replace(/\(\d+ linhas?\)/i, '')
+                    .replace(/\(linha \d+\)/i, '')
+                    .replace(/\(\d+\)/, '')
+                    .trim();
+
+                var explanation = explanations[messageKey] || '';
+
+                html += '<tr class="toggle-' + r.type + '">';
+                html += '<td class="' + cls + '">' + tipoTexto + '</td>';
+                html += '<td>' + (r.record_type || '') + '</td>';
+                html += '<td><a href="' + r.link + '" target="_blank" class="review-link">' + r.object + '</a></td>';
+                html += '<td>' + r.message + '</td>';
+                html += '<td>' + explanation + '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+
+            container.insertAdjacentHTML('beforeend', html);
+
+            toggleGroup('errors', 'error');
+            toggleGroup('warnings', 'warning');
+            toggleGroup('info', 'info');
+        }
+
+        function toggleGroup(id, type) {
+
+            var btn = document.getElementById('toggle-' + id);
+            if (!btn) return;
+
+            document.querySelectorAll('.toggle-' + type)
+                .forEach(function(tr) {
+                    tr.style.display = 'none';
+                });
+
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.toggle-' + type)
+                    .forEach(function(tr) {
+                        tr.style.display = tr.style.display === 'none' ? '' : 'none';
+                    });
+            });
+        }
+
+        addLoadEvent(function() {
+            setTimeout(runReview, 400);
+        });
+    </script>
+
+</j:jelly>]]></xml>
+</sys_ui_macro>
+<sys_ui_macro action="INSERT_OR_UPDATE">
+<active>true</active>
+<category>general</category>
+<description/>
+<media_type/>
+<name>gerador_documentacao</name>
+<scoped_name/>
+<sys_class_name>sys_ui_macro</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2026-01-28 01:14:48</sys_created_on>
+<sys_id>27621388933ef21021cff8eddd03d6cf</sys_id>
+<sys_mod_count>40</sys_mod_count>
+<sys_name>gerador_documentacao</sys_name>
+<sys_package display_value="Global" source="global">global</sys_package>
+<sys_policy/>
+<sys_scope display_value="Global">global</sys_scope>
+<sys_update_name>sys_ui_macro_27621388933ef21021cff8eddd03d6cf</sys_update_name>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2026-03-03 11:16:13</sys_updated_on>
+<xml><![CDATA[<?xml version="1.0" encoding="utf-8"?>
+<j:jelly trim="false" xmlns:j="jelly:core" xmlns:g="glide">
+
+    <!-- ====================== -->
+    <!--     ABA DOCUMENTAÇÃO   -->
+    <!-- ====================== -->
+    <div id="tab-doc" class="tab-content active">
+
+        <style>
+            input[type="text"],
+            select,
+            textarea {
+                width: 100%;
+                padding: 10px;
+                margin: 5px 0 15px 0;
+                border: 1px solid #ccc;
+                border-radius: 6px;
+                box-sizing: border-box;
+            }
+
+            button {
+                padding: 10px 18px;
+                border-radius: 6px;
+                border: none;
+                cursor: pointer;
+                font-weight: bold;
+                margin-right: 10px;
+            }
+
+            #attachBtn {
+                background: #2196F3;
+                color: #fff;
+                //display: none;
+            }
+
+            img {
+                max-width: 800px;
+                max-height: 890px;
+                border-radius: 6px;
+                margin-top: 8px;
+            }
+
+            #docResult table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+
+            #docResult td,
+            #docResult th {
+                text-align: left !important;
+                vertical-align: top;
+                padding: 8px 10px;
+            }
+        </style>
+
+        <div style="max-width:900px; margin:auto; padding:20px;">
+
+            <div style="text-align:center;margin-top:15px;">
+                <button id="attachBtn" type="button"> Anexar Imagem</button>
+                <input type="file" id="fileInput" accept="image/*" style="display:none;" />
+            </div>
+
+            <hr style="margin:30px 0;border:none;border-top:2px solid #eee;" />
+
+            <div id="errorBoxDoc" style="
+				display:none;
+				background:#fdecea;
+				color:#b71c1c;
+				border:1px solid #f5c6cb;
+				border-radius:6px;
+				padding:12px;
+				margin-bottom:15px;
+				font-weight:bold;
+			">
+                Update Set não encontrado.
+            </div>
+            <div id="docResult" style="margin-top:20px; min-height:100px;"></div>
+            <div id="blocoEvidencias" style="margin-top:20px;"></div>
+
+        </div>
+    </div>
+
+    <script>
+        function fetchUpdateSetNames(callback) {
+            var updateSetIds = g_form.getValue('u_update_set') || '';
+
+            var ga = new GlideAjax('GetUpdateSetDocumentation');
+            ga.addParam('sysparm_name', 'getNameUpdateSet');
+            ga.addParam('sysparm_update_set_ids', updateSetIds);
+
+            ga.getXMLAnswer(function(response) {
+                var updateSetNames = response;
+                // Retorna os valores via callback
+                if (callback) callback(updateSetNames);
+            });
+        }
+
+        function generateDocumentation() {
+            var errorBox = document.getElementById("errorBoxDoc");
+            var audience = 'dev';
+
+            // Chamando a função assíncrona
+            fetchUpdateSetNames(function(updateSet) {
+                if (!updateSet) {
+                    errorBox.style.display = "block";
+                    document.getElementById("docResult").innerHTML = "";
+                    return;
+                } else {
+                    errorBox.style.display = "none";
+                }
+
+                var docResult = document.getElementById("docResult");
+                docResult.innerHTML = "<em>Gerando documentação...</em>";
+
+                var ga = new GlideAjax("GetUpdateSetDocumentation");
+                ga.addParam("sysparm_name", "getDocumentation");
+                ga.addParam("sysparm_update_set", updateSet);
+                ga.addParam("sysparm_audience", audience);
+
+                ga.getXMLAnswer(function(response) {
+                    docResult.innerHTML = response || "<i>Nenhum conteúdo retornado.</i>";
+                    document.getElementById("attachBtn").style.display = "inline-block";
+                    tornarReadOnly();
+                    loadExistingImages();
+					toggleAttachButton();
+                });
+            });
+        }
+
+        addLoadEvent(function() {
+            generateDocumentation();
+        });
+
+        function toggleAttachButton() {
+            var btnDoc = document.getElementById('attachBtn');
+            var btnRev = document.getElementById('btnSalvar');
+
+            if (!btnDoc) return;
+
+            var status = g_form.getValue('u_status');
+
+            if (status != 'rascunho') {
+                btnDoc.style.display = 'none';
+                g_form.disableAttachments();
+            }
+
+			if (status != 'documentacao_concluida')
+				btnRev.style.display = 'none';
+        }
+
+        /* ================= UPLOAD DE IMAGENS ================= */
+        document.getElementById("attachBtn").onclick = function() {
+            document.getElementById("fileInput").click();
+        };
+
+        document.getElementById("fileInput").onchange = function(event) {
+
+            var file = event.target.files[0];
+            if (!file) return;
+
+            var reader = new FileReader();
+
+            reader.onload = function(e) {
+
+                var base64 = e.target.result.split(',')[1];
+
+                var ga = new GlideAjax('USDHAttachmentAjaxs');
+                ga.addParam('sysparm_name', 'uploadImage');
+                ga.addParam('sysparm_record_sys_id', g_form.getUniqueValue());
+                ga.addParam('sysparm_file_name', file.name);
+                ga.addParam('sysparm_file_base64', base64);
+
+                ga.getXMLAnswer(function(attachmentSysId) {
+
+                    if (!attachmentSysId) {
+                        alert('Erro ao anexar imagem');
+                        return;
+                    }
+
+                    renderImage(attachmentSysId);
+                });
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        function tornarReadOnly() {
+
+            var docResult = document.getElementById('docResult');
+            if (!docResult) {
+                return;
+            }
+
+            /* ===== INPUTS ===== */
+            var inputs = docResult.getElementsByTagName('input');
+
+            for (var i in inputs) {
+
+                var input = inputs[i];
+                if (!input || !input.setAttribute) {
+                    continue;
+                }
+
+                input.setAttribute('readonly', 'readonly');
+                input.style.backgroundColor = '#f9f9f9';
+                input.style.cursor = 'not-allowed';
+            }
+
+            var textareas = docResult.getElementsByTagName('textarea');
+
+            for (var j in textareas) {
+
+                var ta = textareas[j];
+                if (!ta || !ta.setAttribute) {
+                    continue;
+                }
+
+                ta.setAttribute('readonly', 'readonly');
+                ta.style.backgroundColor = '#f9f9f9';
+                ta.style.cursor = 'not-allowed';
+            }
+        }
+
+        function renderImage(attachmentSysId, description) {
+
+            var status = g_form.getValue('u_status');
+            var readOnlyStatus = (status != 'rascunho');
+
+            var container = document.createElement("div");
+            container.style.marginBottom = "12px";
+
+            /* ===== IMAGEM ===== */
+            var img = document.createElement('img');
+            img.src = '/sys_attachment.do?sys_id=' + attachmentSysId;
+            img.style.maxWidth = "800px";
+            img.style.maxHeight = "890px";
+            img.style.objectFit = "contain";
+            img.style.border = "1px solid #ccc";
+            img.style.borderRadius = "6px";
+            img.style.display = "block";
+
+            container.appendChild(img);
+
+            /* ===== INPUT DESCRIÇÃO ===== */
+            var inputText = document.createElement("input");
+            inputText.type = "text";
+            inputText.placeholder = "Descrição da imagem...";
+            inputText.value = description || '';
+
+            inputText.style.width = "100%";
+            inputText.style.marginTop = "6px";
+            inputText.style.padding = "6px";
+            inputText.style.borderRadius = "4px";
+            inputText.style.border = "1px solid #ccc";
+
+            if (typeof description === 'string' || readOnlyStatus) {
+                tornarInputReadonly(inputText);
+            }
+
+            /* Só permite editar se NÃO estiver aprovado */
+            if (!readOnlyStatus) {
+
+                inputText.ondblclick = function() {
+                    tornarInputEditavel(inputText);
+                    inputText.focus();
+                };
+
+                inputText.onblur = function() {
+
+                    if (!inputText.value.trim())
+                        return;
+
+                    salvarDescricaoImagem(attachmentSysId, inputText.value, function(ok) {
+                        if (ok) {
+                            tornarInputReadonly(inputText);
+                        } else {
+                            alert('Erro ao salvar descrição');
+                        }
+                    });
+                };
+            }
+
+            container.appendChild(inputText);
+
+            /* ===== BOTÃO EXCLUIR ===== */
+            if (!readOnlyStatus) {
+                var btnDelete = document.createElement('button');
+                btnDelete.type = 'button';
+                btnDelete.innerHTML = ' Excluir';
+
+                btnDelete.style.background = '#f44336';
+                btnDelete.style.color = '#fff';
+                btnDelete.style.border = 'none';
+                btnDelete.style.padding = '6px 10px';
+                btnDelete.style.marginTop = '6px';
+                btnDelete.style.cursor = 'pointer';
+
+                btnDelete.onclick = function(e) {
+                    e.preventDefault();
+                    deleteImage(attachmentSysId, container);
+                };
+
+                container.appendChild(btnDelete);
+            }
+			
+            document.getElementById('blocoEvidencias').appendChild(container);
+        }
+
+        function tornarInputReadonly(input) {
+            input.setAttribute('readonly', 'readonly');
+            input.style.backgroundColor = '#f9f9f9';
+            input.style.cursor = 'not-allowed';
+        }
+
+        function tornarInputEditavel(input) {
+            input.removeAttribute('readonly');
+            input.style.backgroundColor = '#fff';
+            input.style.cursor = 'text';
+        }
+
+        function deleteImage(attachmentSysId, container) {
+
+            if (!confirm('Deseja excluir esta imagem?')) {
+                return;
+            }
+
+            var ga = new GlideAjax('USDHAttachmentAjaxs');
+            ga.addParam('sysparm_name', 'deleteImage');
+            ga.addParam('sysparm_attachment_sys_id', attachmentSysId);
+
+            ga.getXMLAnswer(function(response) {
+                if (response === 'true') {
+                    container.remove();
+                } else {
+                    alert('Erro ao excluir imagem');
+                }
+            });
+        }
+
+        function loadExistingImages() {
+
+            var ga = new GlideAjax('USDHAttachmentAjaxs');
+            ga.addParam('sysparm_name', 'getImages');
+            ga.addParam('sysparm_record_sys_id', g_form.getUniqueValue());
+            ga.addParam('sysparm_table', g_form.getTableName());
+
+            ga.getXMLAnswer(function(response) {
+
+                if (!response) return;
+
+                var images = JSON.parse(response);
+                images.forEach(function(img) {
+                    renderImage(img.sys_id, img.description);
+                });
+            });
+        }
+
+        function salvarDescricaoImagem(attachmentSysId, descricao, callback) {
+
+            var ga = new GlideAjax('USDHAttachmentAjaxs');
+            ga.addParam('sysparm_name', 'saveDescription');
+            ga.addParam('sysparm_attachment_sys_id', attachmentSysId);
+            ga.addParam('sysparm_description', descricao);
+
+            ga.getXMLAnswer(function(response) {
+                if (callback)
+                    callback(response === 'true');
+            });
+        }
+    </script>
+
+</j:jelly>]]></xml>
+</sys_ui_macro>
+<sys_ui_macro action="INSERT_OR_UPDATE">
+<active>true</active>
+<category>general</category>
+<description/>
+<media_type/>
+<name>code_review</name>
+<scoped_name/>
+<sys_class_name>sys_ui_macro</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2026-01-28 01:25:29</sys_created_on>
+<sys_id>c3a4978c933ef21021cff8eddd03d6c8</sys_id>
+<sys_mod_count>16</sys_mod_count>
+<sys_name>code_review</sys_name>
+<sys_package display_value="Global" source="global">global</sys_package>
+<sys_policy/>
+<sys_scope display_value="Global">global</sys_scope>
+<sys_update_name>sys_ui_macro_c3a4978c933ef21021cff8eddd03d6c8</sys_update_name>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2026-01-29 22:39:13</sys_updated_on>
+<xml><![CDATA[<?xml version="1.0" encoding="utf-8"?>
+<j:jelly trim="false" xmlns:j="jelly:core" xmlns:g="glide">
+
+    <div id="tab-review" class="tab-content">
+
+        <!-- ====================== -->
+        <!--        ESTILOS         -->
+        <!-- ====================== -->
+        <style>
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 20px;
+                font-size: 13px;
+            }
+
+            th,
+            td {
+                border: 1px solid #ccc;
+                padding: 10px;
+                text-align: center;
+            }
+
+            th {
+                background: #009639;
+                color: #fff;
+            }
+
+            tr.passou td {
+                background-color: #DFF0D8 !important;
+            }
+
+            tr.nao-passou td {
+                background-color: #F8D7DA !important;
+            }
+
+            .table-responsive {
+                width: 100%;
+                overflow-x: auto;
+                margin-top: 20px;
+            }
+
+            input[type="text"] {
+                width: 100%;
+                padding: 8px;
+                margin: 5px 0 10px 0;
+                border-radius: 6px;
+                border: 1px solid #ccc;
+            }
+
+            button {
+                padding: 10px 18px;
+                border-radius: 6px;
+                border: none;
+                cursor: pointer;
+                font-weight: bold;
+            }
+
+            #btnBuscar {
+                background: #2196F3;
+                color: #fff;
+            }
+
+            #btnSalvar {
+                background: #4CAF50;
+                color: #fff;
+                margin-left: 10px;
+            }
+
+            .filters {
+                max-width: 900px;
+                margin: auto;
+                padding: 20px;
+            }
+        </style>
+
+        <!-- ====================== -->
+        <!--        FILTROS         -->
+        <!-- ====================== -->
+        <div class="filters">
+
+            <label><b>Filtrar por Type</b></label>
+            <input type="text" id="typeFilter" placeholder="Ex: Business Rule, Client Script, UI Page" />
+
+            <label><b>Excluir Type</b></label>
+            <input type="text" id="notTypeFilter" placeholder="Ex: Script Include, ACL, Flow" />
+
+            <label><b>Filtrar por Application</b></label>
+            <input type="text" id="applicationFilter" placeholder="Ex: Global, x_app_core, x_app_custom" />
+
+            <div style="margin-top:10px;">
+                <input type="checkbox" id="filterPassou" onchange="filtrarPassou()" />
+                <label for="filterPassou">Mostrar apenas os que passaram</label>
+
+                <input type="checkbox" id="filterNaoPassou" onchange="filtrarNaoPassou()" style="margin-left:15px;" />
+                <label for="filterNaoPassou">Mostrar apenas os que não passaram</label>
+            </div>
+
+            <button id="btnBuscar" type="button" onclick="buscarArtefatos()">]]>🔍<![CDATA[ Buscar</button>
+            <button id="btnSalvar" type="button">]]>💾<![CDATA[ Salvar Review</button>
+
+			<hr style="margin:30px 0;border:none;border-top:2px solid #eee;" />
+			
+			<div id="errorBoxCode" style="
+				display:none;
+				background:#fdecea;
+				color:#b71c1c;
+				border:1px solid #f5c6cb;
+				border-radius:6px;
+				padding:12px;
+				margin-bottom:15px;
+				font-weight:bold;
+			">
+				Update Set não encontrado.
+			</div>
+
+            <div id="resultado"></div>
+        </div>
+    </div>
+
+    <!-- ====================== -->
+    <!--        JAVASCRIPT      -->
+    <!-- ====================== -->
+    <script>
+        function buscarArtefatos() {
+
+            var updateSet = g_form.getDisplayValue('u_update_set');
+            var errorBox = document.getElementById("errorBoxCode");
+
+			if (!updateSet) {
+				errorBox.style.display = "block";
+				document.getElementById("resultado").innerHTML = "";
+				return;
+			} else {
+				errorBox.style.display = "none";
+			}
+
+            var ga = new GlideAjax('GetUpdateSetArtifacts');
+            ga.addParam('sysparm_name', 'getArtifacts');
+            ga.addParam('sysparm_updates', updateSet);
+            ga.addParam('sysparm_types', document.getElementById('typeFilter').value);
+            ga.addParam('sysparm_notTypes', document.getElementById('notTypeFilter').value);
+            ga.addParam('sysparm_application', document.getElementById('applicationFilter').value);
+
+            ga.getXMLAnswer(renderTabela);
+        }
+
+        function renderTabela(response) {
+
+            var data = JSON.parse(response || '[]');
+            var resultado = document.getElementById('resultado');
+            resultado.innerHTML = '';
+
+            if (!data.length) {
+                resultado.innerHTML = '<p><i>Nenhum artefato encontrado.</i></p>';
+                return;
+            }
+
+            var table = document.createElement('table');
+            table.innerHTML =
+                '<thead>' +
+                '<tr>' +
+                '<th>Nome</th>' +
+                '<th>Ação</th>' +
+                '<th>Type</th>' +
+                '<th>Update Set</th>' +
+                '<th>Application</th>' +
+                '<th>Passou</th>' +
+                '<th>Não Passou</th>' +
+                '<th>Comentário</th>' +
+                '</tr>' +
+                '</thead>';
+
+            var tbody = document.createElement('tbody');
+
+            data.forEach(function(item, index) {
+
+                var tr = document.createElement('tr');
+                tr.id = 'row_' + index;
+                tr.setAttribute('data-link', item.link);
+
+                if (item.passou === true) tr.classList.add('passou');
+                if (item.naoPassou === true) tr.classList.add('nao-passou');
+
+                // Nome
+                var tdNome = document.createElement('td');
+                var a = document.createElement('a');
+                a.href = item.link;
+                a.target = '_blank';
+                a.innerText = item.name;
+                tdNome.appendChild(a);
+                tr.appendChild(tdNome);
+
+                ['action', 'type', 'updateSet', 'application'].forEach(function(k) {
+                    var td = document.createElement('td');
+                    td.innerText = item[k];
+                    tr.appendChild(td);
+                });
+
+                // Passou
+                var tdPassou = document.createElement('td');
+                var chkPassou = document.createElement('input');
+                chkPassou.type = 'checkbox';
+                chkPassou.id = 'passou_' + index;
+                chkPassou.checked = item.passou === true;
+                chkPassou.onclick = function() {
+                    marcarPassou(index);
+                };
+                tdPassou.appendChild(chkPassou);
+                tr.appendChild(tdPassou);
+
+                // Não passou
+                var tdNao = document.createElement('td');
+                var chkNao = document.createElement('input');
+                chkNao.type = 'checkbox';
+                chkNao.id = 'naoPassou_' + index;
+                chkNao.checked = item.naoPassou === true;
+                chkNao.onclick = function() {
+                    marcarNaoPassou(index);
+                };
+                tdNao.appendChild(chkNao);
+                tr.appendChild(tdNao);
+
+                // Comentário
+                var tdComent = document.createElement('td');
+                var txt = document.createElement('input');
+                txt.type = 'text';
+                txt.id = 'comentario_' + index;
+                txt.value = item.comentario || '';
+                tdComent.appendChild(txt);
+                tr.appendChild(tdComent);
+
+                tbody.appendChild(tr);
+            });
+
+            table.appendChild(tbody);
+
+            var wrapper = document.createElement('div');
+            wrapper.className = 'table-responsive';
+            wrapper.appendChild(table);
+
+            resultado.appendChild(wrapper);
+        }
+
+        function marcarPassou(i) {
+            var chkPassou = document.getElementById('passou_' + i);
+            var chkNao = document.getElementById('naoPassou_' + i);
+            var row = document.getElementById('row_' + i);
+
+            if (chkPassou.checked) {
+                chkNao.checked = false;
+                row.classList.add('passou');
+                row.classList.remove('nao-passou');
+            } else {
+                row.classList.remove('passou');
+            }
+        }
+
+        function marcarNaoPassou(i) {
+            var chkPassou = document.getElementById('passou_' + i);
+            var chkNao = document.getElementById('naoPassou_' + i);
+            var row = document.getElementById('row_' + i);
+
+            if (chkNao.checked) {
+                chkPassou.checked = false;
+                row.classList.add('nao-passou');
+                row.classList.remove('passou');
+            } else {
+                row.classList.remove('nao-passou');
+            }
+        }
+
+        function filtrarPassou() {
+            var ativo = document.getElementById('filterPassou').checked;
+            document.querySelectorAll('#resultado tbody tr').forEach(function(row) {
+                row.style.display = (!ativo || row.classList.contains('passou')) ? '' : 'none';
+            });
+        }
+
+        function filtrarNaoPassou() {
+            var ativo = document.getElementById('filterNaoPassou').checked;
+            document.querySelectorAll('#resultado tbody tr').forEach(function(row) {
+                row.style.display = (!ativo || row.classList.contains('nao-passou')) ? '' : 'none';
+            });
+        }
+
+        function salvarReviews() {
+            var tbody = document.querySelector('#resultado table tbody');
+            if (!tbody) {
+                alert('Nenhum dado para salvar.');
+                return;
+            }
+
+            var data = [];
+
+            Array.from(tbody.rows).forEach(function(row) {
+
+                var chkPassou = row.querySelector("input[id^='passou_']");
+                var chkNao = row.querySelector("input[id^='naoPassou_']");
+                var comentario = row.querySelector("input[id^='comentario_']");
+				var usdh = g_form.getUniqueValue();
+
+                var passou = false;
+                var naoPassou = false;
+
+                if (chkPassou) {
+                    passou = chkPassou.checked === true;
+                }
+
+                if (chkNao) {
+                    naoPassou = chkNao.checked === true;
+                }
+
+                if (passou || naoPassou) {
+                    data.push({
+                        name: row.cells[0].innerText.trim(),
+                        action: row.cells[1].innerText,
+                        type: row.cells[2].innerText,
+                        updateSet: row.cells[3].innerText,
+                        application: row.cells[4].innerText,
+                        passou: passou,
+                        naoPassou: naoPassou,
+                        comentario: comentario ? comentario.value : '',
+                        link: row.getAttribute('data-link'),
+						usdh: usdh
+                    });
+                }
+            });
+
+            if (data.length === 0) {
+                alert('Nenhum registro selecionado.');
+                return;
+            }
+
+            var ga = new GlideAjax('GetUpdateSetArtifacts');
+            ga.addParam('sysparm_name', 'saveReview');
+            ga.addParam('sysparm_data', JSON.stringify(data));
+            ga.getXMLAnswer(function(response) {
+                alert(response);
+            });
+        }
+
+        addLoadEvent(function() {
+            buscarArtefatos();
+        });
+
+        document.getElementById('btnSalvar').onclick = salvarReviews;
+    </script>
+
+</j:jelly>]]></xml>
+</sys_ui_macro>
+<sys_ui_macro action="INSERT_OR_UPDATE">
+<active>true</active>
+<category>general</category>
+<description/>
+<media_type/>
+<name>instance_scan</name>
+<scoped_name/>
+<sys_class_name>sys_ui_macro</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2026-01-28 01:41:08</sys_created_on>
+<sys_id>2bb81b84937ef21021cff8eddd03d641</sys_id>
+<sys_mod_count>69</sys_mod_count>
+<sys_name>instance_scan</sys_name>
+<sys_package display_value="Global" source="global">global</sys_package>
+<sys_policy/>
+<sys_scope display_value="Global">global</sys_scope>
+<sys_update_name>sys_ui_macro_2bb81b84937ef21021cff8eddd03d641</sys_update_name>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2026-01-29 17:18:33</sys_updated_on>
+<xml><![CDATA[<?xml version="1.0" encoding="utf-8"?>
+<j:jelly trim="false" xmlns:j="jelly:core" xmlns:g="glide">
+
+    <style>
+        .instance-scan-container {
+            max-width: 900px;
+            margin: auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+
+        .instance-scan-container button {
+            padding: 10px 18px;
+            background: #673ab7;
+            color: #fff;
+            font-weight: bold;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .instance-scan-container button:hover {
+            opacity: 0.9;
+        }
+    </style>
+
+    <div class="instance-scan-container">
+        <div id="errorBoxScan" style="
+				display:none;
+				background:#fdecea;
+				color:#b71c1c;
+				border:1px solid #f5c6cb;
+				border-radius:6px;
+				padding:12px;
+				margin-bottom:15px;
+				font-weight:bold;
+			">
+            Update Set não encontrado.
+        </div>
+        <div id="scanResult" style="min-height:100px;"></div>
+        <div id="findingDetails" style="margin-top:20px;"></div>
+
+    </div>
+
+    <script>
+        function executarScan() {
+
+            if (typeof g_form === 'undefined') {
+                return;
+            }
+
+            var result = document.getElementById("scanResult");
+            var updateSet = g_form.getDisplayValue('u_update_set');
+            var errorBox = document.getElementById("errorBoxScan");
+
+            if (!updateSet) {
+                errorBox.style.display = "block";
+                result.innerHTML = "";
+                return;
+            } else {
+                errorBox.style.display = "none";
+            }
+
+            result.innerHTML = "<em>Executando scan...</em>";
+
+            var ga = new GlideAjax("GetInstanceScanResults");
+            ga.addParam("sysparm_name", "runScan");
+            ga.addParam("sysparm_update_set", updateSet);
+
+            ga.getXMLAnswer(function(response) {
+                result.innerHTML = response || "Nenhum resultado.";
+            });
+        }
+
+        if (typeof window.showFindings === 'undefined') {
+            window.showFindings = function(scanId) {
+
+                var detailsDiv = document.getElementById("findingDetails");
+
+                // feedback visual
+                detailsDiv.innerHTML = "<em>Carregando findings...</em>";
+
+                var ga = new GlideAjax("GetInstanceScanResults");
+                ga.addParam("sysparm_name", "getFindings");
+                ga.addParam("sysparm_scan_id", scanId);
+
+                ga.getXMLAnswer(function(response) {
+                    detailsDiv.innerHTML = response || "Nenhum finding encontrado.";
+                });
+            };
+
+        }
+
+        // =============================
+        // EXECUTA AUTOMATICAMENTE
+        // =============================
+        addLoadEvent(function() {
+            executarScan();
+        });
+    </script>
+
+</j:jelly>]]></xml>
+</sys_ui_macro>
+</unload>

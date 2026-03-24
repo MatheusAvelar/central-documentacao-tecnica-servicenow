@@ -1,0 +1,615 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<unload unload_date="2026-03-24 18:35:49">
+<sys_ui_action action="INSERT_OR_UPDATE">
+<action_name>proxima_etapa</action_name>
+<active>true</active>
+<client>true</client>
+<client_script_v2><![CDATA[function onClick(g_form) {
+
+}]]></client_script_v2>
+<comments/>
+<condition>current.u_status != 'rollback_realizado' &amp;&amp; current.u_status != 'subida_concluida' &amp;&amp; current.u_status != 'subida_concluida_com_conflito' &amp;&amp; current.u_status != 'code_review_pronto'  &amp;&amp; current.u_status != 'documentacao_concluida'</condition>
+<form_action>true</form_action>
+<form_button>true</form_button>
+<form_button_v2>false</form_button_v2>
+<form_context_menu>false</form_context_menu>
+<form_link>false</form_link>
+<form_menu_button_v2>false</form_menu_button_v2>
+<form_style>primary</form_style>
+<format_for_configurable_workspace>false</format_for_configurable_workspace>
+<hint/>
+<isolate_script>true</isolate_script>
+<list_action>false</list_action>
+<list_banner_button>false</list_banner_button>
+<list_button>false</list_button>
+<list_choice>false</list_choice>
+<list_context_menu>false</list_context_menu>
+<list_link>false</list_link>
+<list_save_with_form_button>false</list_save_with_form_button>
+<list_style/>
+<messages/>
+<name>Proxíma Etapa</name>
+<onclick>ProximaEtapa()</onclick>
+<order>100</order>
+<script><![CDATA[function ProximaEtapa() {
+    if (confirm("Tem certeza que deseja avançar para a proxíma etapa?")) {
+        gsftSubmit(null, g_form.getFormElement(), "proxima_etapa");
+    } else {
+        return false;
+    }
+}
+
+if (typeof window == 'undefined')
+    setRedirect();
+
+function setRedirect() {
+    proximaEtapa();
+}
+
+function proximaEtapa() {
+    try {
+        var service = new CDT_FluxoService();
+        var msg = '';
+
+        var status = (current.u_status || '').toLowerCase();
+
+        switch (status) {
+
+            case 'rascunho':
+                msg = service.concluirDocumentacao(current);
+                break;
+
+            case 'revisao_aprovada':
+                msg = service.iniciarSubida(current);
+                break;
+
+            case 'correcao_requerida':
+                msg = service.concluirDocumentacao(current);
+                gs.addInfoMessage('Correção necessária: Dev deve ajustar documentação ou código.');
+                action.setRedirectURL(current);
+                break;
+
+            default:
+                gs.addInfoMessage('Nenhuma ação disponível para o status atual.');
+                action.setRedirectURL(current);
+        }
+
+        if (msg)
+            gs.addInfoMessage(msg);
+
+        action.setRedirectURL(current);
+
+    } catch (e) {
+        gs.addErrorMessage('Erro inesperado: ' + e.message);
+        gs.error('Erro inesperado no Script: ' + e.stack);
+        action.setRedirectURL(current);
+    }
+}]]></script>
+<show_insert>true</show_insert>
+<show_multiple_update>false</show_multiple_update>
+<show_query>false</show_query>
+<show_update>true</show_update>
+<sys_class_name>sys_ui_action</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2026-03-03 10:59:01</sys_created_on>
+<sys_domain>global</sys_domain>
+<sys_domain_path>/</sys_domain_path>
+<sys_id>645edcdf9313b21021cff8eddd03d618</sys_id>
+<sys_mod_count>0</sys_mod_count>
+<sys_name>Proxíma Etapa</sys_name>
+<sys_overrides display_value=""/>
+<sys_package display_value="Global" source="global">global</sys_package>
+<sys_policy/>
+<sys_scope display_value="Global">global</sys_scope>
+<sys_update_name>sys_ui_action_645edcdf9313b21021cff8eddd03d618</sys_update_name>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2026-03-03 10:59:01</sys_updated_on>
+<table>u_central_documentacao_tecnica</table>
+<ui11_compatible>true</ui11_compatible>
+<ui16_compatible>false</ui16_compatible>
+</sys_ui_action>
+<sys_ui_action action="INSERT_OR_UPDATE">
+<action_name>aprovar_revisao</action_name>
+<active>true</active>
+<client>true</client>
+<client_script_v2><![CDATA[function onClick(g_form) {
+
+}]]></client_script_v2>
+<comments/>
+<condition>current.u_status == 'documentacao_concluida' &amp;&amp; gs.hasRole('cdt_lt')</condition>
+<form_action>true</form_action>
+<form_button>true</form_button>
+<form_button_v2>false</form_button_v2>
+<form_context_menu>false</form_context_menu>
+<form_link>false</form_link>
+<form_menu_button_v2>false</form_menu_button_v2>
+<form_style>primary</form_style>
+<format_for_configurable_workspace>false</format_for_configurable_workspace>
+<hint/>
+<isolate_script>true</isolate_script>
+<list_action>false</list_action>
+<list_banner_button>false</list_banner_button>
+<list_button>false</list_button>
+<list_choice>false</list_choice>
+<list_context_menu>false</list_context_menu>
+<list_link>false</list_link>
+<list_save_with_form_button>false</list_save_with_form_button>
+<list_style/>
+<messages/>
+<name>Aprovar Revisão</name>
+<onclick>AprovarRevisao()</onclick>
+<order>100</order>
+<script><![CDATA[function AprovarRevisao() {
+    if (confirm("Tem certeza que deseja aprovar a revisão?")) {
+		gsftSubmit(null, g_form.getFormElement(), "aprovar_revisao");
+	} else {
+		return false;
+	}
+}
+
+if (typeof window == 'undefined')
+    setRedirect();
+
+function setRedirect() {
+    aprovarRevisao();
+}
+
+function aprovarRevisao(){
+	try {
+		var service = new CDT_FluxoService();
+		var msg = service.aprovarRevisao(current); // muda status para revisao_aprovada
+		gs.addInfoMessage(msg);
+		action.setRedirectURL(current);
+	} catch(e) {
+		gs.addErrorMessage('Erro ao aprovar revisão: ' + e.message);
+		gs.error(e);
+		action.setRedirectURL(current);
+	}
+}]]></script>
+<show_insert>true</show_insert>
+<show_multiple_update>false</show_multiple_update>
+<show_query>false</show_query>
+<show_update>true</show_update>
+<sys_class_name>sys_ui_action</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2026-03-03 10:59:49</sys_created_on>
+<sys_domain>global</sys_domain>
+<sys_domain_path>/</sys_domain_path>
+<sys_id>869e58139353b21021cff8eddd03d605</sys_id>
+<sys_mod_count>2</sys_mod_count>
+<sys_name>Aprovar Revisão</sys_name>
+<sys_overrides display_value=""/>
+<sys_package display_value="Global" source="global">global</sys_package>
+<sys_policy/>
+<sys_scope display_value="Global">global</sys_scope>
+<sys_update_name>sys_ui_action_869e58139353b21021cff8eddd03d605</sys_update_name>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2026-03-03 11:25:12</sys_updated_on>
+<table>u_central_documentacao_tecnica</table>
+<ui11_compatible>true</ui11_compatible>
+<ui16_compatible>false</ui16_compatible>
+</sys_ui_action>
+<sys_ui_action action="INSERT_OR_UPDATE">
+<action_name>reprovar_revisao</action_name>
+<active>true</active>
+<client>true</client>
+<client_script_v2><![CDATA[function onClick(g_form) {
+
+}]]></client_script_v2>
+<comments/>
+<condition>current.u_status == 'documentacao_concluida' &amp;&amp; gs.hasRole('cdt_lt')</condition>
+<form_action>true</form_action>
+<form_button>true</form_button>
+<form_button_v2>false</form_button_v2>
+<form_context_menu>false</form_context_menu>
+<form_link>false</form_link>
+<form_menu_button_v2>false</form_menu_button_v2>
+<form_style>destructive</form_style>
+<format_for_configurable_workspace>false</format_for_configurable_workspace>
+<hint/>
+<isolate_script>true</isolate_script>
+<list_action>false</list_action>
+<list_banner_button>false</list_banner_button>
+<list_button>false</list_button>
+<list_choice>false</list_choice>
+<list_context_menu>false</list_context_menu>
+<list_link>false</list_link>
+<list_save_with_form_button>false</list_save_with_form_button>
+<list_style/>
+<messages/>
+<name>Reprovar Revisão</name>
+<onclick>ReprovarRevisao()</onclick>
+<order>100</order>
+<script><![CDATA[function ReprovarRevisao() {
+    if (confirm("Tem certeza que deseja reprovar a revisão?")) {
+		gsftSubmit(null, g_form.getFormElement(), "reprovar_revisao");
+	} else {
+		return false;
+	}
+}
+
+if (typeof window == 'undefined')
+    setRedirect();
+
+function setRedirect() {
+    reprovarRevisao();
+}
+
+function reprovarRevisao(){
+	try {
+		var service = new CDT_FluxoService();
+		var msg = service.reprovarRevisao(current); // muda status para correcao_requerida
+		gs.addInfoMessage(msg);
+		action.setRedirectURL(current);
+	} catch(e) {
+		gs.addErrorMessage('Erro ao reprovar revisão: ' + e.message);
+		gs.error(e);
+		action.setRedirectURL(current);
+	}
+}]]></script>
+<show_insert>true</show_insert>
+<show_multiple_update>false</show_multiple_update>
+<show_query>false</show_query>
+<show_update>true</show_update>
+<sys_class_name>sys_ui_action</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2026-03-03 11:00:38</sys_created_on>
+<sys_domain>global</sys_domain>
+<sys_domain_path>/</sys_domain_path>
+<sys_id>a5ce9c139353b21021cff8eddd03d677</sys_id>
+<sys_mod_count>1</sys_mod_count>
+<sys_name>Reprovar Revisão</sys_name>
+<sys_overrides display_value=""/>
+<sys_package display_value="Global" source="global">global</sys_package>
+<sys_policy/>
+<sys_scope display_value="Global">global</sys_scope>
+<sys_update_name>sys_ui_action_a5ce9c139353b21021cff8eddd03d677</sys_update_name>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2026-03-03 11:25:16</sys_updated_on>
+<table>u_central_documentacao_tecnica</table>
+<ui11_compatible>true</ui11_compatible>
+<ui16_compatible>false</ui16_compatible>
+</sys_ui_action>
+<sys_ui_action action="INSERT_OR_UPDATE">
+<action_name>concluir_subida</action_name>
+<active>true</active>
+<client>true</client>
+<client_script_v2><![CDATA[function onClick(g_form) {
+
+}]]></client_script_v2>
+<comments/>
+<condition>current.u_status == 'code_review_pronto' &amp;&amp; gs.hasRole('cdt_analista_release')</condition>
+<form_action>true</form_action>
+<form_button>true</form_button>
+<form_button_v2>false</form_button_v2>
+<form_context_menu>false</form_context_menu>
+<form_link>false</form_link>
+<form_menu_button_v2>false</form_menu_button_v2>
+<form_style>primary</form_style>
+<format_for_configurable_workspace>false</format_for_configurable_workspace>
+<hint/>
+<isolate_script>true</isolate_script>
+<list_action>false</list_action>
+<list_banner_button>false</list_banner_button>
+<list_button>false</list_button>
+<list_choice>false</list_choice>
+<list_context_menu>false</list_context_menu>
+<list_link>false</list_link>
+<list_save_with_form_button>false</list_save_with_form_button>
+<list_style/>
+<messages/>
+<name>Concluir Subida</name>
+<onclick>ConcluirSubida()</onclick>
+<order>100</order>
+<script><![CDATA[function ConcluirSubida() {
+    if (confirm("Tem certeza que deseja concluir a subida?")) {
+		gsftSubmit(null, g_form.getFormElement(), "concluir_subida");
+	} else {
+		return false;
+	}
+}
+
+if (typeof window == 'undefined')
+    setRedirect();
+
+function setRedirect() {
+    concluirSubida();
+}
+
+function concluirSubida(){
+	try {
+		var service = new CDT_FluxoService();
+		var msg = service.concluirSubida(current);
+		gs.addInfoMessage(msg);
+		action.setRedirectURL(current);
+	} catch(e) {
+		gs.addErrorMessage('Erro ao concluir a subida: ' + e.message);
+		gs.error(e);
+		action.setRedirectURL(current);
+	}
+}]]></script>
+<show_insert>true</show_insert>
+<show_multiple_update>false</show_multiple_update>
+<show_query>false</show_query>
+<show_update>true</show_update>
+<sys_class_name>sys_ui_action</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2026-03-03 11:01:30</sys_created_on>
+<sys_domain>global</sys_domain>
+<sys_domain_path>/</sys_domain_path>
+<sys_id>ad0f58539353b21021cff8eddd03d603</sys_id>
+<sys_mod_count>0</sys_mod_count>
+<sys_name>Concluir Subida</sys_name>
+<sys_overrides display_value=""/>
+<sys_package display_value="Global" source="global">global</sys_package>
+<sys_policy/>
+<sys_scope display_value="Global">global</sys_scope>
+<sys_update_name>sys_ui_action_ad0f58539353b21021cff8eddd03d603</sys_update_name>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2026-03-03 11:01:30</sys_updated_on>
+<table>u_central_documentacao_tecnica</table>
+<ui11_compatible>true</ui11_compatible>
+<ui16_compatible>false</ui16_compatible>
+</sys_ui_action>
+<sys_ui_action action="INSERT_OR_UPDATE">
+<action_name/>
+<active>true</active>
+<client>false</client>
+<client_script_v2><![CDATA[function onClick(g_form) {
+
+}]]></client_script_v2>
+<comments/>
+<condition>gs.hasRole('cdt_dev')</condition>
+<form_action>true</form_action>
+<form_button>true</form_button>
+<form_button_v2>false</form_button_v2>
+<form_context_menu>false</form_context_menu>
+<form_link>false</form_link>
+<form_menu_button_v2>false</form_menu_button_v2>
+<form_style>primary</form_style>
+<format_for_configurable_workspace>false</format_for_configurable_workspace>
+<hint/>
+<isolate_script>false</isolate_script>
+<list_action>false</list_action>
+<list_banner_button>false</list_banner_button>
+<list_button>false</list_button>
+<list_choice>false</list_choice>
+<list_context_menu>false</list_context_menu>
+<list_link>false</list_link>
+<list_save_with_form_button>false</list_save_with_form_button>
+<list_style/>
+<messages/>
+<name>Gerar Documentação</name>
+<onclick/>
+<order>100</order>
+<script><![CDATA[var abort = false;
+
+try {
+
+    if (documentationAlreadyExists())
+        abort = true;
+
+    if (!abort && !validateUpdateSet())
+        abort = true;
+
+    if (!abort)
+        generateDocumentationFlow();
+
+} catch (e) {
+    handleUnexpectedError(e);
+}
+
+
+// =====================================================
+// VALIDA SE JÁ EXISTE DOCUMENTAÇÃO PARA A RELEASE
+// =====================================================
+function documentationAlreadyExists() {
+
+    var gr = new GlideRecord('u_central_documentacao_tecnica');
+    gr.addQuery('u_release', current.getUniqueValue());
+    gr.query();
+
+    if (gr.hasNext()) {
+        gs.addErrorMessage('Já existe uma documentação gerada para esta release.');
+        action.setAbortAction(true);
+        return true;
+    }
+
+    return false;
+}
+
+// =====================================================
+// VALIDA SE FOI INFORMADO AO MENOS UM UPDATE SET
+// =====================================================
+function validateUpdateSet() {
+
+    var updateSetList = current.getValue('u_update_set');
+
+    if (!updateSetList) {
+        gs.addErrorMessage('Informe ao menos um Update Set antes de gerar a documentação.');
+        action.setAbortAction(true);
+        return false;
+    }
+
+    return true;
+}
+
+// =====================================================
+// GERA DOCUMENTAÇÃO (apenas cria registro Rascunho)
+// =====================================================
+function generateDocumentationFlow() {
+
+    try {
+
+        var params = buildParams();
+
+        // =====================================================
+        // Chama apenas getDocumentation
+        // =====================================================
+        var html = this.getDocumentation(params);
+
+        // =====================================================
+        // Cria o registro na CDT com status "Rascunho"
+        // =====================================================
+        var gr = new GlideRecord('u_central_documentacao_tecnica');
+        gr.initialize();
+        gr.u_release = params.releaseId;
+        gr.u_update_set = params.updateSetId;
+        gr.u_status = 'rascunho';
+        var usdhSysId = gr.insert();
+
+        // =====================================================
+        // Cria M2M e Code Review automaticamente
+        // =====================================================
+        createUpdateSetRelations(usdhSysId, params.updateSetId);
+
+        gs.addInfoMessage('Documentação criada com sucesso: ' + gr.u_number);
+
+        // =====================================================
+        // Redireciona para o registro criado
+        // =====================================================
+        redirectToDocumentation(usdhSysId);
+
+    } catch (e) {
+        gs.addErrorMessage('Erro ao gerar a documentação: ' + e.message);
+        gs.error('Erro no fluxo principal: ' + e.stack);
+        action.setAbortAction(true);
+    }
+}
+
+// =====================================================
+// CONTRUÇÃO DE PARAMS
+// =====================================================
+function buildParams() {
+
+    return {
+        releaseId: current.getUniqueValue(),
+        updateSetId: current.getValue('u_update_set'),
+        updateSetName: current.u_update_set.getDisplayValue(),
+        audience: 'dev'
+    };
+}
+
+// =====================================================
+// REDIRECIONA PARA DOCUMENTAÇÃO GERADA
+// =====================================================
+function redirectToDocumentation(docId) {
+
+    var usdhGR = new GlideRecord('u_central_documentacao_tecnica');
+
+    if (usdhGR.get(docId)) {
+        action.setRedirectURL(usdhGR);
+    }
+}
+
+// =====================================================
+// CRIA M2M + CODE REVIEW AUTOMÁTICO
+// =====================================================
+function createUpdateSetRelations(docId, listValue) {
+
+    try {
+
+        if (!listValue)
+            return;
+
+        var ids = listValue.split(',');
+
+        for (var i = 0; i < ids.length; i++) {
+
+            var updateSetId = ids[i].trim();
+            if (!updateSetId)
+                continue;
+
+            if (relationAlreadyExists(docId, updateSetId))
+                continue;
+
+            var reviewId = getOrCreateCodeReview(updateSetId);
+
+            var m2m = new GlideRecord('u_m2m_central_documentacao_update_set');
+            m2m.initialize();
+            m2m.u_documentacao = docId;
+            m2m.u_update_set = updateSetId;
+            m2m.u_code_review = reviewId;
+            m2m.insert();
+        }
+
+    } catch (e) {
+        gs.addErrorMessage('Erro ao criar relações M2M ou Code Review: ' + e.message);
+        gs.error('Erro em createUpdateSetRelations: ' + e.stack);
+        action.setAbortAction(true);
+    }
+}
+
+// =====================================================
+// VERIFICA SE RELAÇÃO JÁ EXISTE
+// =====================================================
+function relationAlreadyExists(docId, updateSetId) {
+
+    var exists = new GlideRecord('u_m2m_central_documentacao_update_set');
+    exists.addQuery('u_documentacao', docId);
+    exists.addQuery('u_update_set', updateSetId);
+    exists.query();
+
+    return exists.hasNext();
+}
+
+// =====================================================
+// CRIA CODE REVIEW SE NÃO EXISTIR
+// =====================================================
+function getOrCreateCodeReview(updateSetId) {
+
+    try {
+
+        var review = new GlideRecord('u_code_review');
+        review.addQuery('u_update_set', updateSetId);
+        review.query();
+
+        if (review.next())
+            return review.getUniqueValue();
+
+        review.initialize();
+        review.u_update_set = updateSetId;
+        review.u_status = 'iniciado';
+
+        return review.insert();
+
+    } catch (e) {
+        gs.addErrorMessage('Erro ao criar Code Review: ' + e.message);
+        gs.error('Erro em getOrCreateCodeReview: ' + e.stack);
+        return null;
+    }
+}
+
+// =====================================================
+// TRATA ERROS INESPERADOS
+// =====================================================
+function handleUnexpectedError(e) {
+    gs.addErrorMessage('Erro inesperado no script: ' + e.message);
+    gs.error('Erro inesperado: ' + e.stack);
+    action.setAbortAction(true);
+}
+]]></script>
+<show_insert>true</show_insert>
+<show_multiple_update>false</show_multiple_update>
+<show_query>false</show_query>
+<show_update>true</show_update>
+<sys_class_name>sys_ui_action</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2026-03-03 10:54:05</sys_created_on>
+<sys_domain>global</sys_domain>
+<sys_domain_path>/</sys_domain_path>
+<sys_id>c32d185f9313b21021cff8eddd03d624</sys_id>
+<sys_mod_count>0</sys_mod_count>
+<sys_name>Gerar Documentação</sys_name>
+<sys_overrides display_value=""/>
+<sys_package display_value="Global" source="global">global</sys_package>
+<sys_policy/>
+<sys_scope display_value="Global">global</sys_scope>
+<sys_update_name>sys_ui_action_c32d185f9313b21021cff8eddd03d624</sys_update_name>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2026-03-03 10:54:05</sys_updated_on>
+<table>rm_release_scrum</table>
+<ui11_compatible>true</ui11_compatible>
+<ui16_compatible>false</ui16_compatible>
+</sys_ui_action>
+</unload>

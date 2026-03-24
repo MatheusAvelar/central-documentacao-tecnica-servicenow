@@ -1,136 +1,206 @@
 var abort = false;
 
-// =====================================
-// Verifica se já existe documentação
-// =====================================
-var check = new GlideRecord('u_central_documentacao_tecnica');
-check.addQuery('u_release', current.getUniqueValue());
-check.query();
+try {
 
-if (check.hasNext()) {
-    gs.addErrorMessage('Já existe uma documentação gerada para esta release.');
-    action.setAbortAction(true);
-    abort = true;
+    if (documentationAlreadyExists())
+        abort = true;
+
+    if (!abort && !validateUpdateSet())
+        abort = true;
+
+    if (!abort)
+        generateDocumentationFlow();
+
+} catch (e) {
+    handleUnexpectedError(e);
 }
 
 
-// =====================================
-// Validação básica
-// =====================================
-var updateSetList = current.getValue('u_update_set');
+// =====================================================
+// VALIDA SE JÁ EXISTE DOCUMENTAÇÃO PARA A RELEASE
+// =====================================================
+function documentationAlreadyExists() {
 
-if (!abort && !updateSetList) {
-    gs.addErrorMessage('Informe ao menos um Update Set antes de gerar a documentação.');
-    action.setAbortAction(true);
-    abort = true;
+    var gr = new GlideRecord('u_central_documentacao_tecnica');
+    gr.addQuery('u_release', current.getUniqueValue());
+    gr.query();
+
+    if (gr.hasNext()) {
+        gs.addErrorMessage('Já existe uma documentação gerada para esta release.');
+        action.setAbortAction(true);
+        return true;
+    }
+
+    return false;
 }
 
+// =====================================================
+// VALIDA SE FOI INFORMADO AO MENOS UM UPDATE SET
+// =====================================================
+function validateUpdateSet() {
 
-// =====================================
-// Execução principal
-// =====================================
-if (!abort) {
+    var updateSetList = current.getValue('u_update_set');
 
-    var params = {
+    if (!updateSetList) {
+        gs.addErrorMessage('Informe ao menos um Update Set antes de gerar a documentação.');
+        action.setAbortAction(true);
+        return false;
+    }
+
+    return true;
+}
+
+// =====================================================
+// GERA DOCUMENTAÇÃO (apenas cria registro Rascunho)
+// =====================================================
+function generateDocumentationFlow() {
+
+    try {
+
+        var params = buildParams();
+
+        // =====================================================
+        // Chama apenas getDocumentation
+        // =====================================================
+        var html = this.getDocumentation(params);
+
+        // =====================================================
+        // Cria o registro na CDT com status "Rascunho"
+        // =====================================================
+        var gr = new GlideRecord('u_central_documentacao_tecnica');
+        gr.initialize();
+        gr.u_release = params.releaseId;
+        gr.u_update_set = params.updateSetId;
+        gr.u_status = 'rascunho';
+        var usdhSysId = gr.insert();
+
+        // =====================================================
+        // Cria M2M e Code Review automaticamente
+        // =====================================================
+        createUpdateSetRelations(usdhSysId, params.updateSetId);
+
+        gs.addInfoMessage('Documentação criada com sucesso: ' + gr.u_number);
+
+        // =====================================================
+        // Redireciona para o registro criado
+        // =====================================================
+        redirectToDocumentation(usdhSysId);
+
+    } catch (e) {
+        gs.addErrorMessage('Erro ao gerar a documentação: ' + e.message);
+        gs.error('Erro no fluxo principal: ' + e.stack);
+        action.setAbortAction(true);
+    }
+}
+
+// =====================================================
+// CONTRUÇÃO DE PARAMS
+// =====================================================
+function buildParams() {
+
+    return {
         releaseId: current.getUniqueValue(),
-        updateSetId: updateSetList, // lista de sys_ids
+        updateSetId: current.getValue('u_update_set'),
         updateSetName: current.u_update_set.getDisplayValue(),
         audience: 'dev'
     };
+}
 
-    var service = new GetUpdateSetDocumentation();
-    var result = service.generateFromRelease(params);
+// =====================================================
+// REDIRECIONA PARA DOCUMENTAÇÃO GERADA
+// =====================================================
+function redirectToDocumentation(docId) {
 
-    if (!result || !result.usdh_sys_id) {
+    var usdhGR = new GlideRecord('u_central_documentacao_tecnica');
 
-        gs.addErrorMessage('Erro ao gerar a documentação.');
-        action.setAbortAction(true);
-
-    } else {
-
-        // =====================================
-        // Cria relacionamento M2M + Code Review
-        // =====================================
-        createUpdateSetRelations(result.usdh_sys_id, updateSetList);
-
-        gs.addInfoMessage('Documentação gerada com sucesso: ' + result.usdh_number);
-
-        var usdhGR = new GlideRecord('u_central_documentacao_tecnica');
-        if (usdhGR.get(result.usdh_sys_id)) {
-            action.setRedirectURL(usdhGR);
-        }
+    if (usdhGR.get(docId)) {
+        action.setRedirectURL(usdhGR);
     }
 }
 
-
-
 // =====================================================
-// FUNÇÃO: cria M2M + Code Review automático
+// CRIA M2M + CODE REVIEW AUTOMÁTICO
 // =====================================================
 function createUpdateSetRelations(docId, listValue) {
 
-    if (!listValue)
-        return;
+    try {
 
-    var ids = listValue.split(',');
+        if (!listValue)
+            return;
 
-    for (var i = 0; i < ids.length; i++) {
+        var ids = listValue.split(',');
 
-        var updateSetId = ids[i].trim();
-        if (!updateSetId)
-            continue;
+        for (var i = 0; i < ids.length; i++) {
 
+            var updateSetId = ids[i].trim();
+            if (!updateSetId)
+                continue;
 
-        // =====================================
-        // Evita duplicidade da M2M
-        // =====================================
-        var exists = new GlideRecord('u_m2m_central_documentacao_update_set');
-        exists.addQuery('u_documentacao', docId);
-        exists.addQuery('u_update_set', updateSetId);
-        exists.query();
+            if (relationAlreadyExists(docId, updateSetId))
+                continue;
 
-        if (exists.hasNext())
-            continue;
+            var reviewId = getOrCreateCodeReview(updateSetId);
 
+            var m2m = new GlideRecord('u_m2m_central_documentacao_update_set');
+            m2m.initialize();
+            m2m.u_documentacao = docId;
+            m2m.u_update_set = updateSetId;
+            m2m.u_code_review = reviewId;
+            m2m.insert();
+        }
 
-        // =====================================
-        // CRIA (ou reutiliza) Code Review
-        // =====================================
-        var reviewId = getOrCreateCodeReview(updateSetId, docId);
-
-
-        // =====================================
-        // CRIA M2M
-        // =====================================
-        var m2m = new GlideRecord('u_m2m_central_documentacao_update_set');
-        m2m.initialize();
-        m2m.u_documentacao = docId;
-        m2m.u_update_set = updateSetId;
-        m2m.u_code_review = reviewId;
-        m2m.insert();
+    } catch (e) {
+        gs.addErrorMessage('Erro ao criar relações M2M ou Code Review: ' + e.message);
+        gs.error('Erro em createUpdateSetRelations: ' + e.stack);
+        action.setAbortAction(true);
     }
 }
 
+// =====================================================
+// VERIFICA SE RELAÇÃO JÁ EXISTE
+// =====================================================
+function relationAlreadyExists(docId, updateSetId) {
 
+    var exists = new GlideRecord('u_m2m_central_documentacao_update_set');
+    exists.addQuery('u_documentacao', docId);
+    exists.addQuery('u_update_set', updateSetId);
+    exists.query();
+
+    return exists.hasNext();
+}
 
 // =====================================================
-// FUNÇÃO: cria Code Review se não existir
+// CRIA CODE REVIEW SE NÃO EXISTIR
 // =====================================================
-function getOrCreateCodeReview(updateSetId, docId) {
+function getOrCreateCodeReview(updateSetId) {
 
-    var review = new GlideRecord('u_code_review');
-    review.addQuery('u_update_set', updateSetId);
-    review.query();
+    try {
 
-    // se já existir, reutiliza
-    if (review.next())
-        return review.getUniqueValue();
+        var review = new GlideRecord('u_code_review');
+        review.addQuery('u_update_set', updateSetId);
+        review.query();
 
+        if (review.next())
+            return review.getUniqueValue();
 
-    // cria novo
-    review.initialize();
-    review.u_update_set = updateSetId;
-    review.u_status = 'iniciado';     
-	
-    return review.insert();
+        review.initialize();
+        review.u_update_set = updateSetId;
+        review.u_status = 'iniciado';
+
+        return review.insert();
+
+    } catch (e) {
+        gs.addErrorMessage('Erro ao criar Code Review: ' + e.message);
+        gs.error('Erro em getOrCreateCodeReview: ' + e.stack);
+        return null;
+    }
+}
+
+// =====================================================
+// TRATA ERROS INESPERADOS
+// =====================================================
+function handleUnexpectedError(e) {
+    gs.addErrorMessage('Erro inesperado no script: ' + e.message);
+    gs.error('Erro inesperado: ' + e.stack);
+    action.setAbortAction(true);
 }
